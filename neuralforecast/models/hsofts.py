@@ -12,7 +12,7 @@ from ..losses.pytorch import MAE
 from ..common._base_multivariate import BaseMultivariate
 from ..common._modules import TransEncoder, TransEncoderLayer
 
-from layers.kan import KAN, KANLinear
+from ..layers.kan import KAN, KANLinear
 
 # %% ../../nbs/models.softs.ipynb 6
 class DataEmbedding_inverted(nn.Module):
