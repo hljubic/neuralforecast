@@ -249,10 +249,6 @@ class SOFTS(BaseMultivariate):
 
             segment_predictions.append(dec_out_segment)
 
-        # Check shapes before concatenation
-        for i, seg in enumerate(segment_predictions):
-            print(f"Shape of segment {i}: {seg.shape}")
-
         # Concatenate all segment predictions along the time dimension (dim=1)
         dec_out_full = torch.cat(segment_predictions, dim=1)
 
@@ -261,8 +257,9 @@ class SOFTS(BaseMultivariate):
 
         # De-Normalization from Non-stationary Transformer
         if self.use_norm:
-            dec_out_full = dec_out_full * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-            dec_out_full = dec_out_full + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
+            stdev = stdev[:, 0, :].unsqueeze(1).expand_as(dec_out_full)
+            means = means[:, 0, :].unsqueeze(1).expand_as(dec_out_full)
+            dec_out_full = dec_out_full * stdev + means
 
         return dec_out_full
 
