@@ -275,7 +275,7 @@ class HSOFTS(BaseMultivariate):
         # Diferenciranje
         diff_x_enc = x_enc[:, :, 1:] - x_enc[:, :, :-1]
 
-        self.alpha = 0.1
+        self.alpha = 0.01
         # EWMA zaglađivanje originalnog niza
         ewma_x_enc = torch.zeros_like(diff_x_enc)
         ewma_x_enc[:, :, 0] = diff_x_enc[:, :, 0]  # Početna vrednost
