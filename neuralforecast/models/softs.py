@@ -223,32 +223,34 @@ class SOFTS(BaseMultivariate):
             )
             x_enc /= stdev
 
-        _, _, N = x_enc.shape
+        batch_size, _, N = x_enc.shape
         enc_out = self.enc_embedding(x_enc, None)
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
-        # Split encoder output into four parts for each segment of the horizon
+        # Split encoder output for four projection layers
         segment_len = self.h // 4
         enc_out1 = enc_out[:, :, :N // 4]
         enc_out2 = enc_out[:, :, N // 4: N // 2]
         enc_out3 = enc_out[:, :, N // 2: 3 * N // 4]
         enc_out4 = enc_out[:, :, 3 * N // 4:]
 
-        # Reshape encoder outputs to match the input size of the projection layers
-        enc_out1 = enc_out1.permute(0, 2, 1).contiguous().view(-1, enc_out1.size(1))
-        enc_out2 = enc_out2.permute(0, 2, 1).contiguous().view(-1, enc_out2.size(1))
-        enc_out3 = enc_out3.permute(0, 2, 1).contiguous().view(-1, enc_out3.size(1))
-        enc_out4 = enc_out4.permute(0, 2, 1).contiguous().view(-1, enc_out4.size(1))
+        # Reshape enc_out for each segment to match projection layer input size
+        enc_out1 = enc_out1.reshape(batch_size, -1)
+        enc_out2 = enc_out2.reshape(batch_size, -1)
+        enc_out3 = enc_out3.reshape(batch_size, -1)
+        enc_out4 = enc_out4.reshape(batch_size, -1)
 
         # Apply projection layers to each segment
-        dec_out1 = self.projection1(enc_out1).view(-1, segment_len, enc_out1.size(-1))
-        dec_out2 = self.projection2(enc_out2).view(-1, segment_len, enc_out2.size(-1))
-        dec_out3 = self.projection3(enc_out3).view(-1, segment_len, enc_out3.size(-1))
-        dec_out4 = self.projection4(enc_out4).view(-1, segment_len, enc_out4.size(-1))
+        dec_out1 = self.projection1(enc_out1).view(batch_size, segment_len, -1)
+        dec_out2 = self.projection2(enc_out2).view(batch_size, segment_len, -1)
+        dec_out3 = self.projection3(enc_out3).view(batch_size, segment_len, -1)
+        dec_out4 = self.projection4(enc_out4).view(batch_size, segment_len, -1)
 
-        # Concatenate outputs
+        # Concatenate outputs along the time dimension
         dec_out = torch.cat([dec_out1, dec_out2, dec_out3, dec_out4], dim=1)
-        dec_out = dec_out.permute(0, 2, 1)[:, :, :self.h]
+
+        # Adjust the output to match the full forecast horizon
+        dec_out = dec_out[:, :, :self.h]
 
         if self.use_norm:
             dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
