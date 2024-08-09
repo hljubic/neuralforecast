@@ -158,7 +158,6 @@ class SOFTS(BaseMultivariate):
         lr_scheduler_kwargs=None,
         **trainer_kwargs
     ):
-
         super(SOFTS, self).__init__(
             h=h,
             input_size=input_size,
@@ -208,10 +207,14 @@ class SOFTS(BaseMultivariate):
             ]
         )
 
-        self.projection = nn.Linear(hidden_size, self.h, bias=True)
+        # Define four projection heads for each segment of the horizon
+        segment_len = h // 4  # Assuming h is divisible by 4
+        self.projection1 = nn.Linear(hidden_size, segment_len, bias=True)
+        self.projection2 = nn.Linear(hidden_size, segment_len, bias=True)
+        self.projection3 = nn.Linear(hidden_size, segment_len, bias=True)
+        self.projection4 = nn.Linear(hidden_size, segment_len, bias=True)
 
     def forecast(self, x_enc):
-        # Normalization from Non-stationary Transformer
         if self.use_norm:
             means = x_enc.mean(1, keepdim=True).detach()
             x_enc = x_enc - means
@@ -223,13 +226,40 @@ class SOFTS(BaseMultivariate):
         _, _, N = x_enc.shape
         enc_out = self.enc_embedding(x_enc, None)
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
-        dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
 
-        # De-Normalization from Non-stationary Transformer
+        # Split encoder output into four parts and apply each projection
+        segment_len = self.h // 4
+        enc_out1 = enc_out[:, :, :N // 4]
+        enc_out2 = enc_out[:, :, N // 4: N // 2]
+        enc_out3 = enc_out[:, :, N // 2: 3 * N // 4]
+        enc_out4 = enc_out[:, :, 3 * N // 4:]
+
+        dec_out1 = self.projection1(enc_out1)
+        dec_out2 = self.projection2(enc_out2)
+        dec_out3 = self.projection3(enc_out3)
+        dec_out4 = self.projection4(enc_out4)
+
+        # Concatenate outputs
+        dec_out = torch.cat([dec_out1, dec_out2, dec_out3, dec_out4], dim=-1)
+        dec_out = dec_out.permute(0, 2, 1)[:, :, :N]
+
         if self.use_norm:
             dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
+
         return dec_out
+
+    def forward(self, windows_batch):
+        insample_y = windows_batch["insample_y"]
+
+        y_pred = self.forecast(insample_y)
+        y_pred = y_pred[:, -self.h :, :]
+        y_pred = self.loss.domain_map(y_pred)
+
+        if y_pred.ndim == 2:
+            return y_pred.unsqueeze(-1)
+        else:
+            return y_pred
 
     def forward(self, windows_batch):
         insample_y = windows_batch["insample_y"]
