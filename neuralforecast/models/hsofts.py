@@ -161,7 +161,7 @@ class HSOFTS(BaseMultivariate):
         **trainer_kwargs
     ):
 
-        super(SOFTS, self).__init__(
+        super(HSOFTS, self).__init__(
             h=h,
             input_size=input_size,
             n_series=n_series,

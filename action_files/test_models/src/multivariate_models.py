@@ -7,6 +7,7 @@ import pandas as pd
 from neuralforecast.core import NeuralForecast
 
 from neuralforecast.models.softs import SOFTS
+from neuralforecast.models.hsofts import HSOFTS
 from neuralforecast.models.tsmixer import TSMixer
 from neuralforecast.models.tsmixerx import TSMixerx
 from neuralforecast.models.itransformer import iTransformer
