@@ -245,12 +245,14 @@ class SOFTS(BaseMultivariate):
 
             # Encoder and projection for the segment
             enc_out_segment, _ = self.encoder_segments[i](segment_enc_out, attn_mask=None)
-            dec_out_segment = self.projection_segments[i](enc_out_segment).permute(0, 2, 1)[:, :, :N]
+            dec_out_segment = self.projection_segments[i](enc_out_segment).permute(0, 2, 1)
 
             # De-Normalization for each segment
             if self.use_norm:
-                dec_out_segment = dec_out_segment * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.segment_size, 1))
-                dec_out_segment = dec_out_segment + (means[:, 0, :].unsqueeze(1).repeat(1, self.segment_size, 1))
+                stdev = stdev.permute(0, 2, 1)  # Adjust dimensions for broadcasting
+                dec_out_segment = dec_out_segment * stdev
+                means = means.permute(0, 2, 1)  # Adjust dimensions for broadcasting
+                dec_out_segment = dec_out_segment + means
 
             dec_out_segments.append(dec_out_segment)
 
