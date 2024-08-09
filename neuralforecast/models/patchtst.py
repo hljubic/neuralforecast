@@ -449,7 +449,7 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
             n_layers=n_layers,
             store_attn=store_attn,
         )
-        self.encoder = KANLinear(
+        self.encoder2 = KANLinear(
             in_features=hidden_size,
             out_features=q_len,
             grid_size=5,  # povećano sa 5 na 10
@@ -461,6 +461,12 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
             base_activation=torch.nn.SiLU,
             grid_eps=0.01,
             grid_range=[-1, 1]
+        )
+        self.encoder = nn.Sequential(
+            nn.Flatten(start_dim=1),  # Flatten the input, combining q_len and hidden_size dimensions
+            nn.Linear(q_len * hidden_size, hidden_size),  # Linear layer projecting to hidden_size
+            nn.ReLU(),  # Activation function (can be changed to another if desired)
+            nn.Linear(hidden_size, hidden_size)  # Another Linear layer projecting to the same hidden size
         )
 
     def forward(self, x) -> torch.Tensor:  # x: [bs x nvars x patch_len x patch_num]
