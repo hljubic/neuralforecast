@@ -250,8 +250,8 @@ class HSOFTS(BaseMultivariate):
         self.projection = KANLinear(
             in_features=hidden_size,
             out_features=self.h,
-            grid_size=10,  # povećano sa 5 na 10
-            spline_order=4,  # povećano sa 3 na 4
+            grid_size=5,  # povećano sa 5 na 10
+            spline_order=3,  # povećano sa 3 na 4
             scale_noise=0.05,  # smanjeno sa 0.1 na 0.05
             scale_base=1.5,  # povećano sa 1.0 na 1.5
             scale_spline=1.5,  # povećano sa 1.0 na 1.5
@@ -260,9 +260,9 @@ class HSOFTS(BaseMultivariate):
             grid_eps=0.01,
             grid_range=[-1, 1]
         )
-        self.projection = nn.Linear(hidden_size, self.h, bias=True)
+        #self.projection = nn.Linear(hidden_size, self.h, bias=True)
 
-    def forecast(self, x_enc):
+    def forecast3(self, x_enc):
         # Normalizacija iz Non-stationary Transformer-a
         if self.use_norm:
             means = x_enc.mean(1, keepdim=True).detach()
@@ -311,7 +311,7 @@ class HSOFTS(BaseMultivariate):
 
         return dec_out
 
-    def forecast2(self, x_enc):
+    def forecast(self, x_enc):
         # Normalizacija iz Non-stationary Transformer-a
         if self.use_norm:
             means = x_enc.mean(1, keepdim=True).detach()
@@ -339,6 +339,7 @@ class HSOFTS(BaseMultivariate):
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
 
         return dec_out
+
     def forecast_orig(self, x_enc):
         # Normalization from Non-stationary Transformer
         if self.use_norm:
