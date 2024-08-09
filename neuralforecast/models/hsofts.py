@@ -265,7 +265,6 @@ class HSOFTS(BaseMultivariate):
 
     def forecast(self, x_enc):
         # Normalization from Non-stationary Transformer
-        self.use_norm = False
         if self.use_norm:
             means = x_enc.mean(1, keepdim=True).detach()
             x_enc = x_enc - means
