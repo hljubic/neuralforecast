@@ -257,9 +257,11 @@ class SOFTS(BaseMultivariate):
 
         # De-Normalization from Non-stationary Transformer
         if self.use_norm:
-            stdev = stdev[:, 0, :].unsqueeze(1).expand_as(dec_out_full)
-            means = means[:, 0, :].unsqueeze(1).expand_as(dec_out_full)
-            dec_out_full = dec_out_full * stdev + means
+            stdev_expanded = stdev[:, 0, :].unsqueeze(1).expand(dec_out_full.size(0), dec_out_full.size(1),
+                                                                stdev.size(2))
+            means_expanded = means[:, 0, :].unsqueeze(1).expand(dec_out_full.size(0), dec_out_full.size(1),
+                                                                means.size(2))
+            dec_out_full = dec_out_full * stdev_expanded + means_expanded
 
         return dec_out_full
 
