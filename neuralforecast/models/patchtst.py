@@ -398,6 +398,13 @@ class SimpleLinearEncoder(nn.Module):
         self.linear2 = nn.Linear(linear_hidden_size, hidden_size)
 
     def forward(self, src):
+        # Očekuje se da je src oblika [batch_size, q_len, original_hidden_size]
+
+        batch_size, q_len, original_hidden_size = src.shape
+
+        # Preoblikovanje src tako da može proći kroz linearni sloj
+        src = src.view(batch_size * original_hidden_size, q_len)
+
         # Prolaz kroz prvi linearni sloj
         out = self.linear1(src)
         out = self.activation(out)
@@ -405,6 +412,10 @@ class SimpleLinearEncoder(nn.Module):
 
         # Prolaz kroz drugi linearni sloj
         out = self.linear2(out)
+
+        # Vraćanje u originalni oblik, ali sa novim hidden_size
+        out = out.view(batch_size, original_hidden_size, -1).permute(0, 2, 1)
+
         return out
 
 class TSTiEncoder(nn.Module):  # i means channel-independent
