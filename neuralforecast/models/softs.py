@@ -185,6 +185,7 @@ class SOFTS(BaseMultivariate):
             **trainer_kwargs
         )
 
+
         self.h = h
         self.enc_in = n_series
         self.dec_in = n_series
@@ -216,9 +217,12 @@ class SOFTS(BaseMultivariate):
 
         # Define separate projection layers for each segment
         self.projection_segments = nn.ModuleList([
-            nn.Linear(hidden_size, self.segment_size, bias=True)
+            nn.Linear(hidden_size, hidden_size, bias=True)
             for _ in range(4)
         ])
+
+        # Define a final projection to the desired output size
+        self.final_projection = nn.Linear(hidden_size, self.segment_size, bias=True)
 
     def forecast(self, x_enc):
         # Split x_enc into 4 segments
@@ -241,7 +245,10 @@ class SOFTS(BaseMultivariate):
 
             enc_out_segment = self.enc_embedding(x_segment, None)
             enc_out_segment, _ = self.encoder_segments[i](enc_out_segment, attn_mask=None)
-            dec_out_segment = self.projection_segments[i](enc_out_segment).permute(0, 2, 1)
+            enc_out_segment = self.projection_segments[i](enc_out_segment)
+
+            # Apply the final projection to get the correct output size
+            dec_out_segment = self.final_projection(enc_out_segment).permute(0, 2, 1)
 
             # De-Normalization for each segment
             if self.use_norm:
@@ -259,7 +266,7 @@ class SOFTS(BaseMultivariate):
         insample_y = windows_batch["insample_y"]
 
         y_pred = self.forecast(insample_y)
-        y_pred = y_pred[:, -self.h:, :]
+        y_pred = y_pred[:, -self.h :, :]
         y_pred = self.loss.domain_map(y_pred)
 
         # domain_map might have squeezed the last dimension in case n_series == 1
