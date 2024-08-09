@@ -18,6 +18,7 @@ from ..common._base_windows import BaseWindows
 
 from ..losses.pytorch import MAE
 
+from ..layers.kan import KAN, KANLinear
 # %% ../../nbs/models.patchtst.ipynb 9
 class Transpose(nn.Module):
     """
@@ -447,6 +448,19 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
             res_attention=res_attention,
             n_layers=n_layers,
             store_attn=store_attn,
+        )
+        self.encoder = KANLinear(
+            in_features=hidden_size,
+            out_features=self.h,
+            grid_size=5,  # povećano sa 5 na 10
+            spline_order=3,  # povećano sa 3 na 4
+            scale_noise=0.05,  # smanjeno sa 0.1 na 0.05
+            scale_base=1.5,  # povećano sa 1.0 na 1.5
+            scale_spline=1.5,  # povećano sa 1.0 na 1.5
+            enable_standalone_scale_spline=True,
+            base_activation=torch.nn.SiLU,
+            grid_eps=0.01,
+            grid_range=[-1, 1]
         )
 
     def forward(self, x) -> torch.Tensor:  # x: [bs x nvars x patch_len x patch_num]
