@@ -233,35 +233,25 @@ class SOFTS(BaseMultivariate):
         _, _, N = x_enc.shape
         enc_out = self.enc_embedding(x_enc, None)
 
-        # Split enc_out into 4 parts along the sequence dimension (dim=1)
-        enc_out_split = torch.chunk(enc_out, 4, dim=1)
+        # Split enc_out into 4 segments
+        split_enc_out = torch.split(enc_out, enc_out.size(1) // 4, dim=1)
 
-        # Initialize a list to collect segment predictions
-        segment_predictions = []
+        # Initialize a list to collect the outputs for each segment
+        dec_out_segments = []
 
         # Process each segment with its own encoder and projection
         for i in range(4):
-            enc_out_segment, _ = self.encoder_segments[i](enc_out_split[i], attn_mask=None)
-            dec_out_segment = self.projection_segments[i](enc_out_segment).permute(0, 2, 1)
+            enc_out_segment, _ = self.encoder_segments[i](split_enc_out[i], attn_mask=None)
+            dec_out_segment = self.projection_segments[i](enc_out_segment).permute(0, 2, 1)[:, :, :N]
+            dec_out_segments.append(dec_out_segment)
 
-            # Print the shape of each segment output to debug
-            print(f"Segment {i} dec_out_segment shape: {dec_out_segment.shape}")
-
-            segment_predictions.append(dec_out_segment)
-
-        # Concatenate all segment predictions along the time dimension (dim=1)
-        dec_out_full = torch.cat(segment_predictions, dim=1)
-
-        # Ensure that the concatenated output matches the expected horizon length
-        dec_out_full = dec_out_full[:, :, :self.h]
+        # Concatenate all segment outputs along the time dimension
+        dec_out_full = torch.cat(dec_out_segments, dim=1)
 
         # De-Normalization from Non-stationary Transformer
         if self.use_norm:
-            stdev_expanded = stdev[:, 0, :].unsqueeze(1).expand(dec_out_full.size(0), dec_out_full.size(1),
-                                                                stdev.size(2))
-            means_expanded = means[:, 0, :].unsqueeze(1).expand(dec_out_full.size(0), dec_out_full.size(1),
-                                                                means.size(2))
-            dec_out_full = dec_out_full * stdev_expanded + means_expanded
+            dec_out_full = dec_out_full * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
+            dec_out_full = dec_out_full + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
 
         return dec_out_full
 
