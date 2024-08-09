@@ -243,7 +243,15 @@ class SOFTS(BaseMultivariate):
         for i in range(4):
             enc_out_segment, _ = self.encoder_segments[i](enc_out_split[i], attn_mask=None)
             dec_out_segment = self.projection_segments[i](enc_out_segment).permute(0, 2, 1)
+
+            # Print the shape of each segment output to debug
+            print(f"Segment {i} dec_out_segment shape: {dec_out_segment.shape}")
+
             segment_predictions.append(dec_out_segment)
+
+        # Check shapes before concatenation
+        for i, seg in enumerate(segment_predictions):
+            print(f"Shape of segment {i}: {seg.shape}")
 
         # Concatenate all segment predictions along the time dimension (dim=1)
         dec_out_full = torch.cat(segment_predictions, dim=1)
