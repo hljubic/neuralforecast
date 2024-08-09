@@ -283,14 +283,14 @@ class HSOFTS(BaseMultivariate):
             ewma_x_enc[:, :, t] = self.alpha * diff_x_enc[:, :, t] + (1 - self.alpha) * ewma_x_enc[:, :, t-1]
 
         # Inversija niza i EWMA zaglađivanje inverznog niza
-        reversed_diff_x_enc = diff_x_enc[:, :, ::-1]
+        reversed_diff_x_enc = torch.flip(diff_x_enc, dims=[2])
         ewma_reversed_x_enc = torch.zeros_like(reversed_diff_x_enc)
         ewma_reversed_x_enc[:, :, 0] = reversed_diff_x_enc[:, :, 0]  # Početna vrednost
         for t in range(1, reversed_diff_x_enc.shape[2]):
             ewma_reversed_x_enc[:, :, t] = self.alpha * reversed_diff_x_enc[:, :, t] + (1 - self.alpha) * ewma_reversed_x_enc[:, :, t-1]
 
         # Vraćanje inverznog niza u normalan redosled
-        ewma_reversed_x_enc = ewma_reversed_x_enc[:, :, ::-1]
+        ewma_reversed_x_enc = torch.flip(ewma_reversed_x_enc, dims=[2])
 
         # Aritmetička sredina dva zaglađena niza
         smoothed_x_enc = (ewma_x_enc + ewma_reversed_x_enc) / 2
