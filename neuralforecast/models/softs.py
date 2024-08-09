@@ -230,22 +230,22 @@ class SOFTS(BaseMultivariate):
             )
             x_enc /= stdev
 
-        _, _, N = x_enc.shape
+        B, T, N = x_enc.shape
         enc_out = self.enc_embedding(x_enc, None)
 
         # Initialize output tensor for the full horizon
-        dec_out_full = torch.zeros((x_enc.size(0), self.h, N), device=x_enc.device)
+        dec_out_full = torch.zeros((B, self.h, N), device=x_enc.device)
 
         # Process each segment with its own encoder and projection
         for i in range(4):
             start_idx = i * self.segment_size
             end_idx = (i + 1) * self.segment_size
 
-            # Slice the appropriate segment from the input sequence
-            enc_out_segment_input = enc_out[:, :, start_idx:end_idx]
+            # Slice the appropriate segment from the input sequence (along the time dimension)
+            enc_out_segment_input = enc_out[:, start_idx:end_idx, :]
 
             enc_out_segment, _ = self.encoder_segments[i](enc_out_segment_input, attn_mask=None)
-            dec_out_segment = self.projection_segments[i](enc_out_segment).permute(0, 2, 1)[:, :, :N]
+            dec_out_segment = self.projection_segments[i](enc_out_segment).permute(0, 2, 1)
             dec_out_full[:, start_idx:end_idx, :] = dec_out_segment
 
         # De-Normalization from Non-stationary Transformer
