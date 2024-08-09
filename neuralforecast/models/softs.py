@@ -242,11 +242,14 @@ class SOFTS(BaseMultivariate):
         # Process each segment with its own encoder and projection
         for i in range(4):
             enc_out_segment, _ = self.encoder_segments[i](enc_out_split[i], attn_mask=None)
-            dec_out_segment = self.projection_segments[i](enc_out_segment).permute(0, 2, 1)[:, :, :N]
+            dec_out_segment = self.projection_segments[i](enc_out_segment).permute(0, 2, 1)
             segment_predictions.append(dec_out_segment)
 
         # Concatenate all segment predictions along the time dimension (dim=1)
         dec_out_full = torch.cat(segment_predictions, dim=1)
+
+        # Ensure that the concatenated output matches the expected horizon length
+        dec_out_full = dec_out_full[:, :, :self.h]
 
         # De-Normalization from Non-stationary Transformer
         if self.use_norm:
