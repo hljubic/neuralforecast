@@ -249,9 +249,9 @@ class SOFTS(BaseMultivariate):
 
             # De-Normalization for each segment
             if self.use_norm:
-                stdev = stdev.permute(0, 2, 1)  # Adjust dimensions for broadcasting
+                stdev = stdev.squeeze(1).unsqueeze(2)  # Adjust dimensions for broadcasting
+                means = means.squeeze(1).unsqueeze(2)  # Adjust dimensions for broadcasting
                 dec_out_segment = dec_out_segment * stdev
-                means = means.permute(0, 2, 1)  # Adjust dimensions for broadcasting
                 dec_out_segment = dec_out_segment + means
 
             dec_out_segments.append(dec_out_segment)
