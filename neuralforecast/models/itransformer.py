@@ -253,6 +253,7 @@ class iTransformer(BaseMultivariate):
         self.projector = nn.Linear(self.hidden_size, h, bias=True)
 
     def forecast(self, x_enc):
+        self.use_norm = False
         if self.use_norm:
             # Normalization from Non-stationary Transformer
             means = x_enc.mean(1, keepdim=True).detach()
