@@ -215,10 +215,10 @@ class HSOFTS(BaseMultivariate):
         # Decoder
         #self.projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
         self.projection = KANLinear(
-            in_features=configs.d_model,
-            out_features=configs.pred_len,
-            grid_size=3,  # povećano sa 5 na 10
-            spline_order=2,  # povećano sa 3 na 4
+            in_features=hidden_size,
+            out_features=self.h,
+            grid_size=10,  # povećano sa 5 na 10
+            spline_order=4,  # povećano sa 3 na 4
             scale_noise=0.05,  # smanjeno sa 0.1 na 0.05
             scale_base=1.5,  # povećano sa 1.0 na 1.5
             scale_spline=1.5,  # povećano sa 1.0 na 1.5
