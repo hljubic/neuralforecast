@@ -253,50 +253,6 @@ class iTransformer(BaseMultivariate):
         self.projector = nn.Linear(self.hidden_size, h, bias=True)
 
     def forecast(self, x_enc):
-        # Diferenciranje
-        diff_x_enc = x_enc[:, :, 1:] - x_enc[:, :, :-1]
-        self.use_norm = False
-
-        if self.use_norm:
-            # Normalizacija iz Non-stationary Transformer-a
-            means = diff_x_enc.mean(1, keepdim=True).detach()
-            diff_x_enc = diff_x_enc - means
-            stdev = torch.sqrt(
-                torch.var(diff_x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            diff_x_enc /= stdev
-
-        _, _, N = diff_x_enc.shape  # B L N
-        # B: batch_size;       E: hidden_size;
-        # L: input_size;       S: horizon(h);
-        # N: number of variate (tokens), can also includes covariates
-
-        # Ugradnja (Embedding)
-        # B L N -> B N E                (B L N -> B L E in the vanilla Transformer)
-        enc_out = self.enc_embedding(
-            diff_x_enc, None
-        )  # kovarijate (npr. vremenski pečat) mogu se također ugraditi kao tokeni
-
-        # B N E -> B N E                (B L E -> B L E in the vanilla Transformer)
-        # dimenzije ugradnje vremenskih serija su obrnute, a zatim obrađene pomoću native attn, layernorm i ffn modula
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
-
-        # B N E -> B N S -> B S N
-        dec_out = self.projector(enc_out).permute(0, 2, 1)[
-            :, :, :N
-        ]  # filtriranje kovarijata
-
-        if self.use_norm:
-            # De-normalizacija iz Non-stationary Transformer-a
-            dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-            dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-
-        # Vraćanje diferenciranih vrijednosti u izvorne vrijednosti
-        #dec_out = torch.cat([x_enc[:, :, :1], dec_out], dim=2)
-        #dec_out = torch.cumsum(dec_out, dim=2)
-
-        return dec_out
-    def forecast_orig(self, x_enc):
         if self.use_norm:
             # Normalization from Non-stationary Transformer
             means = x_enc.mean(1, keepdim=True).detach()
