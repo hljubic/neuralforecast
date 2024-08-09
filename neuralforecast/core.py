@@ -244,6 +244,7 @@ class NeuralForecast:
         self : NeuralForecast
             Returns instantiated `NeuralForecast` class.
         """
+        print("Kako jeee?")
         assert all(
             model.h == models[0].h for model in models
         ), "All models should have the same horizon"
