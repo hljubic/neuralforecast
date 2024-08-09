@@ -238,16 +238,18 @@ class SOFTS(BaseMultivariate):
 
         # Process each segment with its own encoder and projection
         for i in range(4):
-            start_idx = i * self.segment_size
-            end_idx = (i + 1) * self.segment_size
+            segment_start = i * self.segment_size
+            segment_end = (i + 1) * self.segment_size
 
-            # Slice the input data for the current segment
-            enc_out_segment = enc_out[:, start_idx:end_idx, :]
+            # Use only the relevant part of the input for each segment
+            enc_out_segment = enc_out[:, segment_start:segment_end, :]
+
+            # Apply the encoder and projection for the segment
             enc_out_segment, _ = self.encoder_segments[i](enc_out_segment, attn_mask=None)
-            dec_out_segment = self.projection_segments[i](enc_out_segment).permute(0, 2, 1)[:, :, :N]
+            dec_out_segment = self.projection_segments[i](enc_out_segment).permute(0, 2, 1)
 
-            # Assign the predicted segment to the corresponding part of the full horizon
-            dec_out_full[:, start_idx:end_idx, :] = dec_out_segment
+            # Place the output in the correct part of the full horizon
+            dec_out_full[:, segment_start:segment_end, :] = dec_out_segment
 
         # De-Normalization from Non-stationary Transformer
         if self.use_norm:
