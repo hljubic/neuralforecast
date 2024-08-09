@@ -252,6 +252,11 @@ class SOFTS(BaseMultivariate):
         # Concatenate all segment outputs
         dec_out_full = torch.cat(dec_out_segments, dim=1)
 
+        print('dec_out_full.shape')
+        print('dec_out_full.shape')
+        print('dec_out_full.shape')
+        print(dec_out_full.shape)
+
         return dec_out_full
 
     def forward(self, windows_batch):
