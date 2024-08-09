@@ -18,7 +18,6 @@ from ..common._base_windows import BaseWindows
 
 from ..losses.pytorch import MAE
 
-from ..layers.kan import KAN, KANLinear
 # %% ../../nbs/models.patchtst.ipynb 9
 class Transpose(nn.Module):
     """
@@ -383,41 +382,6 @@ class Flatten_Head(nn.Module):
         return x
 
 
-class SimpleLinearEncoder(nn.Module):
-    def __init__(self, q_len, hidden_size, linear_hidden_size, dropout=0.0):
-        super(SimpleLinearEncoder, self).__init__()
-
-        # Prvi linearni sloj
-        self.linear1 = nn.Linear(q_len, linear_hidden_size)
-        self.activation = nn.ReLU()  # ili neki drugi aktivacijski sloj po želji
-
-        # Dropout sloj za regularizaciju
-        self.dropout = nn.Dropout(dropout)
-
-        # Drugi linearni sloj
-        self.linear2 = nn.Linear(linear_hidden_size, hidden_size)
-
-    def forward(self, src):
-        # Očekuje se da je src oblika [batch_size, q_len, original_hidden_size]
-
-        batch_size, q_len, original_hidden_size = src.shape
-
-        # Preoblikovanje src tako da može proći kroz linearni sloj
-        src = src.view(batch_size * original_hidden_size, q_len)
-
-        # Prolaz kroz prvi linearni sloj
-        out = self.linear1(src)
-        out = self.activation(out)
-        out = self.dropout(out)
-
-        # Prolaz kroz drugi linearni sloj
-        out = self.linear2(out)
-
-        # Vraćanje u originalni oblik, ali sa novim hidden_size
-        out = out.view(batch_size, original_hidden_size, -1).permute(0, 2, 1)
-
-        return out
-
 class TSTiEncoder(nn.Module):  # i means channel-independent
     """
     TSTiEncoder
@@ -483,25 +447,6 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
             res_attention=res_attention,
             n_layers=n_layers,
             store_attn=store_attn,
-        )
-        self.encoder2 = KANLinear(
-            in_features=hidden_size,
-            out_features=q_len,
-            grid_size=5,  # povećano sa 5 na 10
-            spline_order=3,  # povećano sa 3 na 4
-            scale_noise=0.05,  # smanjeno sa 0.1 na 0.05
-            scale_base=1.5,  # povećano sa 1.0 na 1.5
-            scale_spline=1.5,  # povećano sa 1.0 na 1.5
-            enable_standalone_scale_spline=True,
-            base_activation=torch.nn.SiLU,
-            grid_eps=0.01,
-            grid_range=[-1, 1]
-        )
-        self.encoder = SimpleLinearEncoder(
-            q_len=q_len,
-            hidden_size=hidden_size,
-            linear_hidden_size=linear_hidden_size,
-            dropout=dropout
         )
 
     def forward(self, x) -> torch.Tensor:  # x: [bs x nvars x patch_len x patch_num]
