@@ -221,15 +221,6 @@ class SOFTS(BaseMultivariate):
         ])
 
     def forecast(self, x_enc):
-        # Normalization from Non-stationary Transformer
-        if self.use_norm:
-            means = x_enc.mean(1, keepdim=True).detach()
-            x_enc = x_enc - means
-            stdev = torch.sqrt(
-                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            x_enc /= stdev
-
         _, _, N = x_enc.shape
         enc_out = self.enc_embedding(x_enc, None)
 
@@ -241,17 +232,30 @@ class SOFTS(BaseMultivariate):
 
         # Process each segment with its own encoder and projection
         for i in range(4):
-            enc_out_segment, _ = self.encoder_segments[i](split_enc_out[i], attn_mask=None)
+            # Normalization for each segment
+            if self.use_norm:
+                means = split_enc_out[i].mean(1, keepdim=True).detach()
+                segment_enc_out = split_enc_out[i] - means
+                stdev = torch.sqrt(
+                    torch.var(segment_enc_out, dim=1, keepdim=True, unbiased=False) + 1e-5
+                )
+                segment_enc_out /= stdev
+            else:
+                segment_enc_out = split_enc_out[i]
+
+            # Encoder and projection for the segment
+            enc_out_segment, _ = self.encoder_segments[i](segment_enc_out, attn_mask=None)
             dec_out_segment = self.projection_segments[i](enc_out_segment).permute(0, 2, 1)[:, :, :N]
+
+            # De-Normalization for each segment
+            if self.use_norm:
+                dec_out_segment = dec_out_segment * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.segment_size, 1))
+                dec_out_segment = dec_out_segment + (means[:, 0, :].unsqueeze(1).repeat(1, self.segment_size, 1))
+
             dec_out_segments.append(dec_out_segment)
 
         # Concatenate all segment outputs along the time dimension
         dec_out_full = torch.cat(dec_out_segments, dim=1)
-
-        # De-Normalization from Non-stationary Transformer
-        if self.use_norm:
-            dec_out_full = dec_out_full * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-            dec_out_full = dec_out_full + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
 
         return dec_out_full
 
