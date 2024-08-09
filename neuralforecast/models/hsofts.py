@@ -263,6 +263,34 @@ class HSOFTS(BaseMultivariate):
         )
 
     def forecast(self, x_enc):
+        # Normalizacija iz Non-stationary Transformer-a
+        if self.use_norm:
+            means = x_enc.mean(1, keepdim=True).detach()
+            x_enc = x_enc - means
+            stdev = torch.sqrt(
+                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
+            )
+            x_enc /= stdev
+
+        # Diferenciranje
+        diff_x_enc = x_enc[:, :, 1:] - x_enc[:, :, :-1]
+
+        _, _, N = diff_x_enc.shape
+        enc_out = self.enc_embedding(diff_x_enc, None)
+        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+        dec_out = self.projection(enc_out).permute(0, 2, 1)
+
+        # Vraćanje diferenciranih vrijednosti u izvorne vrijednosti
+        dec_out = torch.cat([x_enc[:, :, :1], dec_out], dim=2)
+        dec_out = torch.cumsum(dec_out, dim=2)
+
+        # De-Normalizacija iz Non-stationary Transformer-a
+        if self.use_norm:
+            dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
+            dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
+
+        return dec_out
+    def forecast_orig(self, x_enc):
         # Normalization from Non-stationary Transformer
         if self.use_norm:
             means = x_enc.mean(1, keepdim=True).detach()
