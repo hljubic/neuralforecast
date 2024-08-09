@@ -220,7 +220,7 @@ class SOFTS(BaseMultivariate):
             for _ in range(4)
         ])
 
-    def forecast(self, x_enc, segment_idx):
+    def forecast(self, x_enc):
         # Normalization from Non-stationary Transformer
         if self.use_norm:
             means = x_enc.mean(1, keepdim=True).detach()
@@ -233,29 +233,34 @@ class SOFTS(BaseMultivariate):
         _, _, N = x_enc.shape
         enc_out = self.enc_embedding(x_enc, None)
 
-        # Process the specific segment with its own encoder and projection
-        enc_out_segment, _ = self.encoder_segments[segment_idx](enc_out, attn_mask=None)
-        dec_out_segment = self.projection_segments[segment_idx](enc_out_segment).permute(0, 2, 1)[:, :, :N]
+        # Initialize output tensor for the full horizon
+        dec_out_full = torch.zeros((x_enc.size(0), self.h, N), device=x_enc.device)
+
+        # Process each segment with its own encoder and projection
+        for i in range(4):
+            start_idx = i * self.segment_size
+            end_idx = (i + 1) * self.segment_size
+
+            # Slice the input data for the current segment
+            enc_out_segment = enc_out[:, start_idx:end_idx, :]
+            enc_out_segment, _ = self.encoder_segments[i](enc_out_segment, attn_mask=None)
+            dec_out_segment = self.projection_segments[i](enc_out_segment).permute(0, 2, 1)[:, :, :N]
+
+            # Assign the predicted segment to the corresponding part of the full horizon
+            dec_out_full[:, start_idx:end_idx, :] = dec_out_segment
 
         # De-Normalization from Non-stationary Transformer
         if self.use_norm:
-            dec_out_segment = dec_out_segment * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.segment_size, 1))
-            dec_out_segment = dec_out_segment + (means[:, 0, :].unsqueeze(1).repeat(1, self.segment_size, 1))
+            dec_out_full = dec_out_full * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
+            dec_out_full = dec_out_full + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
 
-        return dec_out_segment
+        return dec_out_full
 
     def forward(self, windows_batch):
         insample_y = windows_batch["insample_y"]
 
-        # Initialize output tensor for the full horizon
-        y_pred_full = torch.zeros((insample_y.size(0), self.h, insample_y.size(2)), device=insample_y.device)
-
-        # Process each segment with its own network
-        for i in range(4):
-            y_pred_segment = self.forecast(insample_y[:, i * self.segment_size:(i + 1) * self.segment_size, :], i)
-            y_pred_full[:, i * self.segment_size:(i + 1) * self.segment_size, :] = y_pred_segment
-
-        y_pred = y_pred_full[:, -self.h:, :]
+        y_pred = self.forecast(insample_y)
+        y_pred = y_pred[:, -self.h:, :]
         y_pred = self.loss.domain_map(y_pred)
 
         # domain_map might have squeezed the last dimension in case n_series == 1
