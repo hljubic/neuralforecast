@@ -221,38 +221,32 @@ class SOFTS(BaseMultivariate):
         ])
 
     def forecast(self, x_enc):
-        _, _, N = x_enc.shape
-        enc_out = self.enc_embedding(x_enc, None)
-
-        # Split enc_out into 4 segments
-        split_enc_out = torch.split(enc_out, enc_out.size(1) // 4, dim=1)
+        # Split x_enc into 4 segments
+        split_x_enc = torch.split(x_enc, x_enc.size(1) // 4, dim=1)
 
         # Initialize a list to collect the outputs for each segment
         dec_out_segments = []
 
-        # Process each segment with its own encoder and projection
         for i in range(4):
+            x_segment = split_x_enc[i]
+
             # Normalization for each segment
             if self.use_norm:
-                means = split_enc_out[i].mean(1, keepdim=True).detach()
-                segment_enc_out = split_enc_out[i] - means
+                means = x_segment.mean(1, keepdim=True).detach()
+                x_segment = x_segment - means
                 stdev = torch.sqrt(
-                    torch.var(segment_enc_out, dim=1, keepdim=True, unbiased=False) + 1e-5
+                    torch.var(x_segment, dim=1, keepdim=True, unbiased=False) + 1e-5
                 )
-                segment_enc_out /= stdev
-            else:
-                segment_enc_out = split_enc_out[i]
+                x_segment /= stdev
 
-            # Encoder and projection for the segment
-            enc_out_segment, _ = self.encoder_segments[i](segment_enc_out, attn_mask=None)
+            enc_out_segment = self.enc_embedding(x_segment, None)
+            enc_out_segment, _ = self.encoder_segments[i](enc_out_segment, attn_mask=None)
             dec_out_segment = self.projection_segments[i](enc_out_segment).permute(0, 2, 1)
 
             # De-Normalization for each segment
             if self.use_norm:
-                stdev = stdev.squeeze(1).unsqueeze(2)  # Adjust dimensions for broadcasting
-                means = means.squeeze(1).unsqueeze(2)  # Adjust dimensions for broadcasting
-                dec_out_segment = dec_out_segment * stdev
-                dec_out_segment = dec_out_segment + means
+                dec_out_segment = dec_out_segment * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.segment_size, 1))
+                dec_out_segment = dec_out_segment + (means[:, 0, :].unsqueeze(1).repeat(1, self.segment_size, 1))
 
             dec_out_segments.append(dec_out_segment)
 
