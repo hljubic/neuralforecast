@@ -310,7 +310,6 @@ class HSOFTS(BaseMultivariate):
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
 
         return dec_out
-
     def forecast(self, x_enc):
         # Normalizacija iz Non-stationary Transformer-a
         if self.use_norm:
@@ -329,15 +328,13 @@ class HSOFTS(BaseMultivariate):
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
         dec_out = self.projection(enc_out).permute(0, 2, 1)
 
-        # Podešavanje dimenzije dec_out da odgovara razlici između horizon i input_size
-        if dec_out.shape[2] < x_enc.shape[2]:
-            diff = x_enc.shape[2] - dec_out.shape[2]
-            dec_out = torch.cat([x_enc[:, :, :diff], dec_out], dim=2)
-        else:
-            dec_out = torch.cat([x_enc[:, :, :1], dec_out], dim=2)
-
         # Vraćanje diferenciranih vrijednosti u izvorne vrijednosti
         dec_out = torch.cumsum(dec_out, dim=2)
+
+        # Dodaj početne vrijednosti iz x_enc da bi dimenzije bile odgovarajuće
+        if dec_out.shape[2] < x_enc.shape[2] - 1:
+            padding = x_enc[:, :, : x_enc.shape[2] - dec_out.shape[2] - 1]
+            dec_out = torch.cat([padding, dec_out], dim=2)
 
         # De-normalizacija iz Non-stationary Transformer-a
         if self.use_norm:
