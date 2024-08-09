@@ -383,6 +383,30 @@ class Flatten_Head(nn.Module):
         return x
 
 
+class SimpleLinearEncoder(nn.Module):
+    def __init__(self, q_len, hidden_size, linear_hidden_size, dropout=0.0):
+        super(SimpleLinearEncoder, self).__init__()
+
+        # Prvi linearni sloj
+        self.linear1 = nn.Linear(q_len, linear_hidden_size)
+        self.activation = nn.ReLU()  # ili neki drugi aktivacijski sloj po želji
+
+        # Dropout sloj za regularizaciju
+        self.dropout = nn.Dropout(dropout)
+
+        # Drugi linearni sloj
+        self.linear2 = nn.Linear(linear_hidden_size, hidden_size)
+
+    def forward(self, src):
+        # Prolaz kroz prvi linearni sloj
+        out = self.linear1(src)
+        out = self.activation(out)
+        out = self.dropout(out)
+
+        # Prolaz kroz drugi linearni sloj
+        out = self.linear2(out)
+        return out
+
 class TSTiEncoder(nn.Module):  # i means channel-independent
     """
     TSTiEncoder
@@ -462,11 +486,11 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
             grid_eps=0.01,
             grid_range=[-1, 1]
         )
-        self.encoder = nn.Sequential(
-            nn.Flatten(start_dim=1),  # Flatten the input, combining q_len and hidden_size dimensions
-            nn.Linear(q_len * hidden_size, hidden_size),  # Linear layer projecting to hidden_size
-            nn.ReLU(),  # Activation function (can be changed to another if desired)
-            nn.Linear(hidden_size, hidden_size)  # Another Linear layer projecting to the same hidden size
+        self.encoder = SimpleLinearEncoder(
+            q_len=q_len,
+            hidden_size=hidden_size,
+            linear_hidden_size=linear_hidden_size,
+            dropout=dropout
         )
 
     def forward(self, x) -> torch.Tensor:  # x: [bs x nvars x patch_len x patch_num]
