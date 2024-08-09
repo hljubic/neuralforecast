@@ -246,7 +246,7 @@ class HSOFTS(BaseMultivariate):
 
         # KAN-only architecture
         self.encoder = KAN(
-            layers_hidden=[configs.d_model] * (configs.e_layers + 1),
+            layers_hidden=[hidden_size] * (d_ff + 1),
             grid_size=5,
             spline_order=3,
             scale_noise=0.1,
