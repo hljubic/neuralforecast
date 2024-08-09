@@ -185,7 +185,6 @@ class SOFTS(BaseMultivariate):
             **trainer_kwargs
         )
 
-
         self.h = h
         self.enc_in = n_series
         self.dec_in = n_series
@@ -198,66 +197,59 @@ class SOFTS(BaseMultivariate):
         # Architecture
         self.enc_embedding = DataEmbedding_inverted(input_size, hidden_size, dropout)
 
-        # Define separate encoder models for each segment
-        self.encoder_segments = nn.ModuleList([
-            TransEncoder(
-                [
-                    TransEncoderLayer(
-                        STAD(hidden_size, d_core),
-                        hidden_size,
-                        d_ff,
-                        dropout=dropout,
-                        activation=F.gelu,
-                    )
-                    for l in range(e_layers)
-                ]
-            )
-            for _ in range(4)
-        ])
+        self.encoder = TransEncoder(
+            [
+                TransEncoderLayer(
+                    STAD(hidden_size, d_core),
+                    hidden_size,
+                    d_ff,
+                    dropout=dropout,
+                    activation=F.gelu,
+                )
+                for l in range(e_layers)
+            ]
+        )
 
         # Define separate projection layers for each segment
         self.projection_segments = nn.ModuleList([
-            nn.Linear(hidden_size, hidden_size, bias=True)
+            nn.Linear(hidden_size, self.segment_size, bias=True)
             for _ in range(4)
         ])
 
-        # Define a final projection to the desired output size
-        self.final_projection = nn.Linear(hidden_size, self.segment_size, bias=True)
-
     def forecast(self, x_enc):
-        # Split x_enc into 4 segments
-        split_x_enc = torch.split(x_enc, x_enc.size(1) // 4, dim=1)
+        # Split input into 4 segments
+        segment_size = x_enc.size(1) // 4
+        segments = torch.split(x_enc, segment_size, dim=1)
 
-        # Initialize a list to collect the outputs for each segment
+        # Initialize a list to hold the normalized and projected outputs for each segment
         dec_out_segments = []
 
-        for i in range(4):
-            x_segment = split_x_enc[i]
-
-            # Normalization for each segment
+        for i, segment in enumerate(segments):
+            # Normalization for each segment separately
             if self.use_norm:
-                means = x_segment.mean(1, keepdim=True).detach()
-                x_segment = x_segment - means
+                means = segment.mean(1, keepdim=True).detach()
+                segment = segment - means
                 stdev = torch.sqrt(
-                    torch.var(x_segment, dim=1, keepdim=True, unbiased=False) + 1e-5
+                    torch.var(segment, dim=1, keepdim=True, unbiased=False) + 1e-5
                 )
-                x_segment /= stdev
+                segment /= stdev
 
-            enc_out_segment = self.enc_embedding(x_segment, None)
-            enc_out_segment, _ = self.encoder_segments[i](enc_out_segment, attn_mask=None)
-            enc_out_segment = self.projection_segments[i](enc_out_segment)
+            # Embedding and encoding for each segment
+            enc_out_segment = self.enc_embedding(segment, None)
+            enc_out_segment, _ = self.encoder(enc_out_segment, attn_mask=None)
 
-            # Apply the final projection to get the correct output size
-            dec_out_segment = self.final_projection(enc_out_segment).permute(0, 2, 1)
+            # Projection for each segment
+            dec_out_segment = self.projection_segments[i](enc_out_segment).permute(0, 2, 1)
 
-            # De-Normalization for each segment
+            # De-normalization for each segment separately
             if self.use_norm:
                 dec_out_segment = dec_out_segment * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.segment_size, 1))
                 dec_out_segment = dec_out_segment + (means[:, 0, :].unsqueeze(1).repeat(1, self.segment_size, 1))
 
+            # Append the segment output to the list
             dec_out_segments.append(dec_out_segment)
 
-        # Concatenate all segment outputs along the time dimension
+        # Concatenate all segment outputs
         dec_out_full = torch.cat(dec_out_segments, dim=1)
 
         return dec_out_full
@@ -266,7 +258,7 @@ class SOFTS(BaseMultivariate):
         insample_y = windows_batch["insample_y"]
 
         y_pred = self.forecast(insample_y)
-        y_pred = y_pred[:, -self.h :, :]
+        y_pred = y_pred[:, -self.h:, :]
         y_pred = self.loss.domain_map(y_pred)
 
         # domain_map might have squeezed the last dimension in case n_series == 1
