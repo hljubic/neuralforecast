@@ -79,85 +79,43 @@ class STAD(nn.Module):
         return output, None
 
 # %% ../../nbs/models.softs.ipynb 10
+
 class SOFTS(BaseMultivariate):
-    """SOFTS
-
-    **Parameters:**<br>
-    `h`: int, Forecast horizon. <br>
-    `input_size`: int, autorregresive inputs size, y=[1,2,3,4] input_size=2 -> y_[t-2:t]=[1,2].<br>
-    `n_series`: int, number of time-series.<br>
-    `futr_exog_list`: str list, future exogenous columns.<br>
-    `hist_exog_list`: str list, historic exogenous columns.<br>
-    `stat_exog_list`: str list, static exogenous columns.<br>
-    `hidden_size`: int, dimension of the model.<br>
-    `d_core`: int, dimension of core in STAD.<br>
-    `e_layers`: int, number of encoder layers.<br>
-    `d_ff`: int, dimension of fully-connected layer.<br>
-    `dropout`: float, dropout rate.<br>
-    `use_norm`: bool, whether to normalize or not.<br>
-    `loss`: PyTorch module, instantiated train loss class from [losses collection](https://nixtla.github.io/neuralforecast/losses.pytorch.html).<br>
-    `valid_loss`: PyTorch module=`loss`, instantiated valid loss class from [losses collection](https://nixtla.github.io/neuralforecast/losses.pytorch.html).<br>
-    `max_steps`: int=1000, maximum number of training steps.<br>
-    `learning_rate`: float=1e-3, Learning rate between (0, 1).<br>
-    `num_lr_decays`: int=-1, Number of learning rate decays, evenly distributed across max_steps.<br>
-    `early_stop_patience_steps`: int=-1, Number of validation iterations before early stopping.<br>
-    `val_check_steps`: int=100, Number of training steps between every validation loss check.<br>
-    `batch_size`: int=32, number of different series in each batch.<br>
-    `step_size`: int=1, step size between each window of temporal data.<br>
-    `scaler_type`: str='identity', type of scaler for temporal inputs normalization see [temporal scalers](https://nixtla.github.io/neuralforecast/common.scalers.html).<br>
-    `random_seed`: int=1, random_seed for pytorch initializer and numpy generators.<br>
-    `num_workers_loader`: int=os.cpu_count(), workers to be used by `TimeSeriesDataLoader`.<br>
-    `drop_last_loader`: bool=False, if True `TimeSeriesDataLoader` drops last non-full batch.<br>
-    `alias`: str, optional,  Custom name of the model.<br>
-    `optimizer`: Subclass of 'torch.optim.Optimizer', optional, user specified optimizer instead of the default choice (Adam).<br>
-    `optimizer_kwargs`: dict, optional, list of parameters used by the user specified `optimizer`.<br>
-    `lr_scheduler`: Subclass of 'torch.optim.lr_scheduler.LRScheduler', optional, user specified lr_scheduler instead of the default choice (StepLR).<br>
-    `lr_scheduler_kwargs`: dict, optional, list of parameters used by the user specified `lr_scheduler`.<br>
-    `**trainer_kwargs`: int,  keyword trainer arguments inherited from [PyTorch Lighning's trainer](https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.trainer.trainer.Trainer.html?highlight=trainer).<br>
-
-    **References**<br>
-    [Lu Han, Xu-Yang Chen, Han-Jia Ye, De-Chuan Zhan. "SOFTS: Efficient Multivariate Time Series Forecasting with Series-Core Fusion"](https://arxiv.org/pdf/2404.14197)
-    """
-
-    # Class attributes
-    SAMPLING_TYPE = "multivariate"
-    EXOGENOUS_FUTR = False
-    EXOGENOUS_HIST = False
-    EXOGENOUS_STAT = False
 
     def __init__(
-        self,
-        h,
-        input_size,
-        n_series,
-        futr_exog_list=None,
-        hist_exog_list=None,
-        stat_exog_list=None,
-        hidden_size: int = 512,
-        d_core: int = 512,
-        e_layers: int = 2,
-        d_ff: int = 2048,
-        dropout: float = 0.1,
-        use_norm: bool = True,
-        loss=MAE(),
-        valid_loss=None,
-        max_steps: int = 1000,
-        learning_rate: float = 1e-3,
-        num_lr_decays: int = -1,
-        early_stop_patience_steps: int = -1,
-        val_check_steps: int = 100,
-        batch_size: int = 32,
-        step_size: int = 1,
-        scaler_type: str = "identity",
-        random_seed: int = 1,
-        num_workers_loader: int = 0,
-        drop_last_loader: bool = False,
-        optimizer=None,
-        optimizer_kwargs=None,
-        lr_scheduler=None,
-        lr_scheduler_kwargs=None,
-        **trainer_kwargs
+            self,
+            h,
+            input_size,
+            n_series,
+            futr_exog_list=None,
+            hist_exog_list=None,
+            stat_exog_list=None,
+            hidden_size: int = 512,
+            d_core: int = 512,
+            e_layers: int = 2,
+            d_ff: int = 2048,
+            dropout: float = 0.1,
+            use_norm: bool = True,
+            loss=MAE(),
+            valid_loss=None,
+            max_steps: int = 1000,
+            learning_rate: float = 1e-3,
+            num_lr_decays: int = -1,
+            early_stop_patience_steps: int = -1,
+            val_check_steps: int = 100,
+            batch_size: int = 32,
+            step_size: int = 1,
+            scaler_type: str = "identity",
+            random_seed: int = 1,
+            num_workers_loader: int = 0,
+            drop_last_loader: bool = False,
+            optimizer=None,
+            optimizer_kwargs=None,
+            lr_scheduler=None,
+            lr_scheduler_kwargs=None,
+            **trainer_kwargs
     ):
+
         super(SOFTS, self).__init__(
             h=h,
             input_size=input_size,
@@ -191,30 +149,26 @@ class SOFTS(BaseMultivariate):
         self.c_out = n_series
         self.use_norm = use_norm
 
-        # Architecture
-        self.enc_embedding = DataEmbedding_inverted(input_size, hidden_size, dropout)
-
-        self.encoder = TransEncoder(
-            [
-                TransEncoderLayer(
-                    STAD(hidden_size, d_core),
-                    hidden_size,
-                    d_ff,
-                    dropout=dropout,
-                    activation=F.gelu,
-                )
-                for l in range(e_layers)
-            ]
-        )
-
-        # Define four projection heads for each segment of the horizon
-        segment_len = h // 4  # Assuming h is divisible by 4
-        self.projection1 = nn.Linear(hidden_size, segment_len, bias=True)
-        self.projection2 = nn.Linear(hidden_size, segment_len, bias=True)
-        self.projection3 = nn.Linear(hidden_size, segment_len, bias=True)
-        self.projection4 = nn.Linear(hidden_size, segment_len, bias=True)
+        # Define the four sub-models for different parts of the horizon
+        self.enc_embedding = nn.ModuleList([DataEmbedding_inverted(input_size, hidden_size, dropout) for _ in range(4)])
+        self.encoder = nn.ModuleList([
+            TransEncoder(
+                [
+                    TransEncoderLayer(
+                        STAD(hidden_size, d_core),
+                        hidden_size,
+                        d_ff,
+                        dropout=dropout,
+                        activation=F.gelu,
+                    )
+                    for l in range(e_layers)
+                ]
+            ) for _ in range(4)
+        ])
+        self.projection = nn.ModuleList([nn.Linear(hidden_size, h // 4, bias=True) for _ in range(4)])
 
     def forecast(self, x_enc):
+        # Normalization from Non-stationary Transformer
         if self.use_norm:
             means = x_enc.mean(1, keepdim=True).detach()
             x_enc = x_enc - means
@@ -223,58 +177,31 @@ class SOFTS(BaseMultivariate):
             )
             x_enc /= stdev
 
-        batch_size, _, N = x_enc.shape
-        enc_out = self.enc_embedding(x_enc, None)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+        _, _, N = x_enc.shape
+        y_preds = []
+        for i in range(4):
+            start_idx = i * (self.h // 4)
+            end_idx = (i + 1) * (self.h // 4)
 
-        # Split encoder output for four projection layers
-        segment_len = self.h // 4
-        enc_out1 = enc_out[:, :, :N // 4]
-        enc_out2 = enc_out[:, :, N // 4: N // 2]
-        enc_out3 = enc_out[:, :, N // 2: 3 * N // 4]
-        enc_out4 = enc_out[:, :, 3 * N // 4:]
+            enc_out = self.enc_embedding[i](x_enc[:, :, start_idx:end_idx], None)
+            enc_out, attns = self.encoder[i](enc_out, attn_mask=None)
+            dec_out = self.projection[i](enc_out).permute(0, 2, 1)[:, :, :N]
+            y_preds.append(dec_out)
 
-        # Reshape enc_out for each segment to match projection layer input size
-        enc_out1 = enc_out1.reshape(batch_size, -1)
-        enc_out2 = enc_out2.reshape(batch_size, -1)
-        enc_out3 = enc_out3.reshape(batch_size, -1)
-        enc_out4 = enc_out4.reshape(batch_size, -1)
+        # Concatenate all the predictions
+        y_pred = torch.cat(y_preds, dim=2)
 
-        # Apply projection layers to each segment
-        dec_out1 = self.projection1(enc_out1).view(batch_size, segment_len, -1)
-        dec_out2 = self.projection2(enc_out2).view(batch_size, segment_len, -1)
-        dec_out3 = self.projection3(enc_out3).view(batch_size, segment_len, -1)
-        dec_out4 = self.projection4(enc_out4).view(batch_size, segment_len, -1)
-
-        # Concatenate outputs along the time dimension
-        dec_out = torch.cat([dec_out1, dec_out2, dec_out3, dec_out4], dim=1)
-
-        # Adjust the output to match the full forecast horizon
-        dec_out = dec_out[:, :, :self.h]
-
+        # De-Normalization from Non-stationary Transformer
         if self.use_norm:
-            dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-            dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-
-        return dec_out
-
-    def forward(self, windows_batch):
-        insample_y = windows_batch["insample_y"]
-
-        y_pred = self.forecast(insample_y)
-        y_pred = y_pred[:, -self.h :, :]
-        y_pred = self.loss.domain_map(y_pred)
-
-        if y_pred.ndim == 2:
-            return y_pred.unsqueeze(-1)
-        else:
-            return y_pred
+            y_pred = y_pred * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
+            y_pred = y_pred + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
+        return y_pred
 
     def forward(self, windows_batch):
         insample_y = windows_batch["insample_y"]
 
         y_pred = self.forecast(insample_y)
-        y_pred = y_pred[:, -self.h :, :]
+        y_pred = y_pred[:, -self.h:, :]
         y_pred = self.loss.domain_map(y_pred)
 
         # domain_map might have squeezed the last dimension in case n_series == 1
