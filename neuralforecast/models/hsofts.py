@@ -262,57 +262,8 @@ class HSOFTS(BaseMultivariate):
         )
         #self.projection = nn.Linear(hidden_size, self.h, bias=True)
 
-    def forecast3(self, x_enc):
-        # Normalizacija iz Non-stationary Transformer-a
-        if self.use_norm:
-            means = x_enc.mean(1, keepdim=True).detach()
-            x_enc = x_enc - means
-            stdev = torch.sqrt(
-                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            x_enc /= stdev
-
-        # Diferenciranje
-        diff_x_enc = x_enc[:, :, 1:] - x_enc[:, :, :-1]
-
-        self.alpha = 0.01
-        # EWMA zaglađivanje originalnog niza
-        ewma_x_enc = torch.zeros_like(diff_x_enc)
-        ewma_x_enc[:, :, 0] = diff_x_enc[:, :, 0]  # Početna vrednost
-        for t in range(1, diff_x_enc.shape[2]):
-            ewma_x_enc[:, :, t] = self.alpha * diff_x_enc[:, :, t] + (1 - self.alpha) * ewma_x_enc[:, :, t-1]
-
-        # Inversija niza i EWMA zaglađivanje inverznog niza
-        reversed_diff_x_enc = torch.flip(diff_x_enc, dims=[2])
-        ewma_reversed_x_enc = torch.zeros_like(reversed_diff_x_enc)
-        ewma_reversed_x_enc[:, :, 0] = reversed_diff_x_enc[:, :, 0]  # Početna vrednost
-        for t in range(1, reversed_diff_x_enc.shape[2]):
-            ewma_reversed_x_enc[:, :, t] = self.alpha * reversed_diff_x_enc[:, :, t] + (1 - self.alpha) * ewma_reversed_x_enc[:, :, t-1]
-
-        # Vraćanje inverznog niza u normalan redosled
-        ewma_reversed_x_enc = torch.flip(ewma_reversed_x_enc, dims=[2])
-
-        # Aritmetička sredina dva zaglađena niza
-        smoothed_x_enc = (ewma_x_enc + ewma_reversed_x_enc) / 2
-
-        _, _, N = smoothed_x_enc.shape
-        enc_out = self.enc_embedding(smoothed_x_enc, None)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
-        dec_out = self.projection(enc_out).permute(0, 2, 1)
-
-        # Vraćanje diferenciranih vrednosti u izvorne vrednosti
-        dec_out = torch.cat([x_enc[:, :, :1], dec_out], dim=2)
-        dec_out = torch.cumsum(dec_out, dim=2)
-
-        # De-normalizacija iz Non-stationary Transformer-a
-        if self.use_norm:
-            dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-            dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-
-        return dec_out
-
     def forecast(self, x_enc):
-        # Normalizacija iz Non-stationary Transformer-a
+        # Normalization from Non-stationary Transformer
         if self.use_norm:
             means = x_enc.mean(1, keepdim=True).detach()
             x_enc = x_enc - means
@@ -321,35 +272,27 @@ class HSOFTS(BaseMultivariate):
             )
             x_enc /= stdev
 
-        # Diferenciranje
-        diff_x_enc = x_enc[:, :, 1:] - x_enc[:, :, :-1]
+        # Differencing (diff(1))
+        x_enc_diff = x_enc[:, :, 1:] - x_enc[:, :, :-1]
 
-        _, _, N = diff_x_enc.shape
-        enc_out = self.enc_embedding(diff_x_enc, None)
+        _, _, N = x_enc_diff.shape
+        enc_out = self.enc_embedding(x_enc_diff, None)
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
-        dec_out = self.projection(enc_out).permute(0, 2, 1)
+        dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
 
-        # Priprema za vraćanje diferenciranih vrijednosti u izvorne vrijednosti
-        # Prvo ćemo provjeriti da li se dimenzije poklapaju
-        if dec_out.shape[2] < x_enc.shape[2] - 1:
-            # Ako je dimenzija dec_out manja, prilagođavamo ga dodavanjem početne vrijednosti
-            diff = x_enc.shape[2] - dec_out.shape[2] - 1
-            dec_out = torch.cat([x_enc[:, :, :diff], dec_out], dim=2)
-        elif dec_out.shape[2] > x_enc.shape[2] - 1:
-            # Ako je dimenzija dec_out veća, prilagođavamo uzimajući samo potrebne dijelove
-            dec_out = dec_out[:, :, :x_enc.shape[2] - 1]
+        # Reverse differencing to return to original scale
+        # Calculate cumulative sum to reverse the differencing
+        initial_values = x_enc[:, :, :1].repeat(1, 1, self.h)
+        dec_out = torch.cumsum(dec_out, dim=2) + initial_values
 
-        # Vraćanje diferenciranih vrijednosti u izvorne vrijednosti
-        dec_out = torch.cumsum(dec_out, dim=2)
-
-        # De-normalizacija iz Non-stationary Transformer-a
+        # De-Normalization from Non-stationary Transformer
         if self.use_norm:
             dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
 
         return dec_out
 
-    def forecast4(self, x_enc):
+    def forecast2(self, x_enc):
         # Normalizacija iz Non-stationary Transformer-a
         if self.use_norm:
             means = x_enc.mean(1, keepdim=True).detach()
