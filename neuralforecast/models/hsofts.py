@@ -243,7 +243,18 @@ class HSOFTS(BaseMultivariate):
                 for l in range(e_layers)
             ]
         )
-
+        self.encoder = KAN(
+            [
+                KANLayer(
+                    STAD(hidden_size, d_core),
+                    hidden_size,
+                    d_ff,
+                    dropout=dropout,
+                    activation=F.gelu,
+                )
+                for l in range(e_layers)
+            ]
+        )
 
         # Decoder
         #self.projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
