@@ -244,7 +244,6 @@ class HSOFTS(BaseMultivariate):
             ]
         )
 
-        self.projection = nn.Linear(hidden_size, self.h, bias=True)
 
         # Decoder
         #self.projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
@@ -261,6 +260,7 @@ class HSOFTS(BaseMultivariate):
             grid_eps=0.01,
             grid_range=[-1, 1]
         )
+        self.projection = nn.Linear(hidden_size, self.h, bias=True)
 
     def forecast(self, x_enc):
         # Normalizacija iz Non-stationary Transformer-a
