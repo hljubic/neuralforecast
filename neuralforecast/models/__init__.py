@@ -35,5 +35,6 @@ from .bitcn import BiTCN
 from .tide import TiDE
 from .deepnpts import DeepNPTS
 from .softs import SOFTS
+from .hsofts import HSOFTS
 from .timemixer import TimeMixer
 from .kan import KAN
