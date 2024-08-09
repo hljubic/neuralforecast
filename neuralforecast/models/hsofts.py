@@ -262,33 +262,33 @@ class HSOFTS(BaseMultivariate):
         )
         #self.projection = nn.Linear(hidden_size, self.h, bias=True)
 
+
     def forecast(self, x_enc):
-        # Normalization from Non-stationary Transformer
+        # Diferenciranje
+        diff_x_enc = x_enc[:, :, 1:] - x_enc[:, :, :-1]
+
+        # Normalizacija iz Non-stationary Transformer-a
         if self.use_norm:
-            means = x_enc.mean(1, keepdim=True).detach()
-            x_enc = x_enc - means
+            means = diff_x_enc.mean(1, keepdim=True).detach()
+            diff_x_enc = diff_x_enc - means
             stdev = torch.sqrt(
-                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
+                torch.var(diff_x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
             )
-            x_enc /= stdev
+            diff_x_enc /= stdev
 
-        # Differencing (diff(1))
-        x_enc_diff = x_enc[:, :, 1:] - x_enc[:, :, :-1]
-
-        _, _, N = x_enc_diff.shape
-        enc_out = self.enc_embedding(x_enc_diff, None)
+        _, _, N = diff_x_enc.shape
+        enc_out = self.enc_embedding(diff_x_enc, None)
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
-        dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
+        dec_out = self.projection(enc_out).permute(0, 2, 1)
 
-        # Reverse differencing to return to original scale
-        # Calculate cumulative sum to reverse the differencing
-        initial_values = x_enc[:, :, :1].repeat(1, 1, self.h)
-        dec_out = torch.cumsum(dec_out, dim=2) + initial_values
-
-        # De-Normalization from Non-stationary Transformer
+        # De-normalizacija iz Non-stationary Transformer-a
         if self.use_norm:
             dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
+
+        # Vraćanje diferenciranih vrijednosti u izvorne vrijednosti
+        dec_out = torch.cat([x_enc[:, :, :1], dec_out], dim=2)
+        dec_out = torch.cumsum(dec_out, dim=2)
 
         return dec_out
 
