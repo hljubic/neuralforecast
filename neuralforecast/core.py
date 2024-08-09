@@ -1098,6 +1098,7 @@ class NeuralForecast:
             DataFrame with insample `models` columns for point predictions and probabilistic
             predictions for all fitted `models`.
         """
+        print("Kako jeee? 2")
         h = self.h
         if n_windows is None and test_size is None:
             raise Exception("you must define `n_windows` or `test_size`.")
