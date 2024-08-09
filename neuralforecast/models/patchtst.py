@@ -451,7 +451,7 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
         )
         self.encoder = KANLinear(
             in_features=hidden_size,
-            out_features=self.h,
+            out_features=q_len,
             grid_size=5,  # povećano sa 5 na 10
             spline_order=3,  # povećano sa 3 na 4
             scale_noise=0.05,  # smanjeno sa 0.1 na 0.05
