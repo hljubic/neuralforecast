@@ -233,8 +233,8 @@ class SOFTS(BaseMultivariate):
 
     def forward(self, windows_batch):
         insample_y = windows_batch["insample_y"]
-        print(windows_batch["insample_y"])
-        print(windows_batch)
+        print(windows_batch["insample_y"].shape)
+        print(windows_batch.shape)
         return
 
         y_pred = self.forecast(insample_y)
