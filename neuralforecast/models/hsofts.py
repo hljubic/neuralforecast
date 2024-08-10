@@ -123,10 +123,12 @@ import torch.nn as nn
 import torch
 import torch.nn as nn
 
+import torch
+import torch.nn as nn
 
 class DiffEmbedding(nn.Module):
     """
-    Diff Embedding
+    Diff Embedding with added initial zero value to maintain dimensions.
     """
 
     def __init__(self, c_in, d_model, dropout=0.1):
@@ -135,23 +137,25 @@ class DiffEmbedding(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x, x_mark=None):
-        # Permutacija dimenzija da bi bile u formatu [Batch, Variate, Time]
-        x = x.permute(0, 2, 1)  # [Batch, Time, Variate]
-        # Izračunavanje razlike prvog reda (diff(1))
-        x_diff = x[:, :, 1:] - x[:, :, :-1]  # [Batch, Variate, Time-1]
+        # x: [Batch, Variate, Time]
+        x = x.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
+
+        # Calculate first order differences along the time dimension
+        x_diff = x[:, 1:, :] - x[:, :-1, :]
+
+        # Add an initial zero to keep the dimension consistent
+        initial_zero = torch.zeros(x.size(0), 1, x.size(2), device=x.device)  # [Batch, 1, Variate]
+        x_diff = torch.cat([initial_zero, x_diff], dim=1)  # [Batch, Time, Variate]
 
         if x_mark is None:
             x = self.value_embedding(x_diff)
         else:
-            # Permutacija koverijata i njihova kombinacija sa razlikama
-            x_mark = x_mark.permute(0, 2, 1)
-            x_mark = x_mark[:, :, 1:]  # Prilagodite dimenzije x_mark da odgovaraju x_diff
-            x_combined = torch.cat([x_diff, x_mark], dim=1)  # Kombinacija sa koverijatima
-            x = self.value_embedding(x_combined)
+            # The potential to take covariates (e.g. timestamps) as tokens
+            x_mark = x_mark.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
+            x = self.value_embedding(torch.cat([x_diff, x_mark], dim=2))  # Concatenate along the feature dimension
 
-        # Primena dropout-a
+        # x: [Batch, Time, d_model]
         return self.dropout(x)
-
 
 class DiffEmbedding2(nn.Module):
     def __init__(self, c_in, d_model, dropout=0.1):
