@@ -114,6 +114,30 @@ class TemporalEmbedding(nn.Module):
         x = x + self.position_embedding[:, :x.size(1)]
         return x
 
+
+import torch
+import torch.nn as nn
+
+
+class DiffEmbedding(nn.Module):
+    def __init__(self, c_in, d_model, dropout=0.1):
+        super(DiffEmbedding, self).__init__()
+        self.value_embedding = nn.Linear(c_in, d_model)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x):
+        # Calculate diff(1) - differences of first order along the time dimension
+        x_diff = x[:, :, 1:] - x[:, :, :-1]
+
+        # Embedding for the differences
+        x_diff = self.value_embedding(x_diff)
+
+        # Apply dropout
+        x_diff = self.dropout(x_diff)
+
+        return x_diff
+
+
 # %% ../../nbs/models.hsofts.ipynb 10
 class HSOFTS(BaseMultivariate):
     """SOFTS
@@ -221,15 +245,15 @@ class HSOFTS(BaseMultivariate):
             lr_scheduler_kwargs=lr_scheduler_kwargs,
             **trainer_kwargs
         )
-
         self.h = h
         self.enc_in = n_series
         self.dec_in = n_series
         self.c_out = n_series
         self.use_norm = use_norm
 
-        # Architecture
-        self.enc_embedding = DataEmbedding_inverted(input_size, hidden_size, dropout)
+        # Dva embedding sloja: jedan za originalne vrednosti, drugi za razlike
+        self.value_embedding = DataEmbedding_inverted(input_size, hidden_size, dropout)
+        self.diff_embedding = DiffEmbedding(input_size, hidden_size, dropout)
 
         self.encoder = TransEncoder(
             [
@@ -244,24 +268,7 @@ class HSOFTS(BaseMultivariate):
             ]
         )
 
-
-        # Decoder
-        #self.projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
-        self.projection = KANLinear(
-            in_features=hidden_size,
-            out_features=self.h,
-            grid_size=5,  # povećano sa 5 na 10
-            spline_order=3,  # povećano sa 3 na 4
-            scale_noise=0.05,  # smanjeno sa 0.1 na 0.05
-            scale_base=1.5,  # povećano sa 1.0 na 1.5
-            scale_spline=1.5,  # povećano sa 1.0 na 1.5
-            enable_standalone_scale_spline=True,
-            base_activation=torch.nn.SiLU,
-            grid_eps=0.01,
-            grid_range=[-1, 1]
-        )
-        #self.projection = nn.Linear(hidden_size, self.h, bias=True)
-
+        self.projection = nn.Linear(hidden_size, self.h, bias=True)
 
     def forecast(self, x_enc):
         # Normalization from Non-stationary Transformer
@@ -274,8 +281,15 @@ class HSOFTS(BaseMultivariate):
             x_enc /= stdev
 
         _, _, N = x_enc.shape
-        enc_out = self.enc_embedding(x_enc, None)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+
+        # Generisanje embeddinga za originalne vrednosti i za razlike
+        value_emb = self.value_embedding(x_enc, None)
+        diff_emb = self.diff_embedding(x_enc)
+
+        # Kombinacija oba embeddinga (npr. konkatenacija ili sabiranje)
+        combined_emb = value_emb + diff_emb  # Možete koristiti torch.cat za konkatenaciju ili torch.add za sabiranje
+
+        enc_out, attns = self.encoder(combined_emb, attn_mask=None)
         dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
 
         # De-Normalization from Non-stationary Transformer
@@ -288,7 +302,7 @@ class HSOFTS(BaseMultivariate):
         insample_y = windows_batch["insample_y"]
 
         y_pred = self.forecast(insample_y)
-        y_pred = y_pred[:, -self.h :, :]
+        y_pred = y_pred[:, -self.h:, :]
         y_pred = self.loss.domain_map(y_pred)
 
         # domain_map might have squeezed the last dimension in case n_series == 1
