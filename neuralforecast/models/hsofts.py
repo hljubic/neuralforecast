@@ -251,9 +251,9 @@ class HSOFTS(BaseMultivariate):
         self.c_out = n_series
         self.use_norm = use_norm
 
-        # Dva embedding sloja: jedan za originalne vrednosti, drugi za razlike
-        self.value_embedding = DataEmbedding_inverted(input_size, hidden_size, dropout)
-        self.diff_embedding = DiffEmbedding(input_size, hidden_size, dropout)
+        # Architecture
+        self.enc_embedding = DiffEmbedding(input_size, hidden_size,
+                                           dropout)  # Koristi DiffEmbedding umesto DataEmbedding_inverted
 
         self.encoder = TransEncoder(
             [
@@ -268,7 +268,6 @@ class HSOFTS(BaseMultivariate):
             ]
         )
 
-        # Adjust the projection layer to match the input dimension
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
 
     def forecast(self, x_enc):
@@ -282,18 +281,8 @@ class HSOFTS(BaseMultivariate):
             x_enc /= stdev
 
         _, _, N = x_enc.shape
-
-        # Generisanje embeddinga za originalne vrednosti i za razlike
-        value_emb = self.value_embedding(x_enc, None)
-        diff_emb = self.diff_embedding(x_enc)
-
-        # Concatenate the embeddings along the feature dimension (dim=1)
-        combined_emb = torch.cat([value_emb, diff_emb], dim=1)  # Concatenation
-
-        # If combined_emb has more dimensions than expected, adjust projection accordingly
-        combined_emb = combined_emb.permute(0, 2, 1)  # Adjust shape to match (Batch, Time, Features)
-
-        enc_out, attns = self.encoder(combined_emb, attn_mask=None)
+        enc_out = self.enc_embedding(x_enc)  # Koristi DiffEmbedding u forecast metodi
+        enc_out, attns = self.encoder(enc_out, attn_mask=None)
         dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
 
         # De-Normalization from Non-stationary Transformer
