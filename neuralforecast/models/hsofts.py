@@ -132,7 +132,45 @@ import math
 import torch
 import torch.nn as nn
 
+import torch
+import torch.nn as nn
+
 class EWMAEmbedding(nn.Module):
+    """
+    EWMA Embedding with forward and backward smoothing, followed by averaging.
+    """
+
+    def __init__(self, c_in, d_model, alpha=0.3, dropout=0.1):
+        super(EWMAEmbedding, self).__init__()
+        self.alpha = alpha  # Smoothing factor for EWMA
+        self.value_embedding = nn.Linear(c_in, d_model)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x, x_mark=None):
+        # x: [Batch, Variate, Time]
+        x = x.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
+
+        # Calculate EWMA from left to right (forward)
+        ewma_forward = torch.zeros_like(x)
+        ewma_forward[:, 0, :] = x[:, 0, :]  # Set the first value as it is
+        for t in range(1, x.size(1)):
+            ewma_forward[:, t, :] = self.alpha * x[:, t, :] + (1 - self.alpha) * ewma_forward[:, t - 1, :]
+
+        # Calculate EWMA from right to left (backward)
+        ewma_backward = torch.zeros_like(x)
+        ewma_backward[:, -1, :] = x[:, -1, :]  # Set the last value as it is
+        for t in range(x.size(1) - 2, -1, -1):
+            ewma_backward[:, t, :] = self.alpha * x[:, t, :] + (1 - self.alpha) * ewma_backward[:, t + 1, :]
+
+        # Average the forward and backward EWMA
+        ewma = (ewma_forward + ewma_backward) / 2
+
+        # Apply the linear embedding to the EWMA-smoothed data
+        x_ewma_emb = self.value_embedding(ewma)
+
+        return self.dropout(x_ewma_emb)
+
+class EWMAEmbedding2(nn.Module):
     """
     EWMA Embedding for smoothing the time series data.
     """
