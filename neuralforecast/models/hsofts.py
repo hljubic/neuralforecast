@@ -399,7 +399,7 @@ class HSOFTS(BaseMultivariate):
         # Architecture: Tri embedding sloja
         self.value_embedding = DataEmbedding_inverted(input_size, hidden_size, dropout)
         self.diff_embedding = DiffEmbedding(input_size, hidden_size, dropout)
-        #self.ewma_embedding = EWMAEmbedding(input_size, hidden_size, dropout=dropout)
+        self.ewma_embedding = EWMAEmbedding(input_size, hidden_size, dropout=dropout)
 
         self.encoder = TransEncoder(
             [
