@@ -120,6 +120,9 @@ import torch.nn as nn
 import torch
 import torch.nn as nn
 
+import torch
+import torch.nn as nn
+
 
 class DiffEmbedding(nn.Module):
     """
@@ -133,16 +136,17 @@ class DiffEmbedding(nn.Module):
 
     def forward(self, x, x_mark=None):
         # Permutacija dimenzija da bi bile u formatu [Batch, Variate, Time]
-        x = x.permute(0, 2, 1)
+        x = x.permute(0, 2, 1)  # [Batch, Time, Variate]
         # Izračunavanje razlike prvog reda (diff(1))
-        x_diff = x[:, :, 1:] - x[:, :, :-1]
+        x_diff = x[:, :, 1:] - x[:, :, :-1]  # [Batch, Variate, Time-1]
 
         if x_mark is None:
             x = self.value_embedding(x_diff)
         else:
             # Permutacija koverijata i njihova kombinacija sa razlikama
             x_mark = x_mark.permute(0, 2, 1)
-            x_combined = torch.cat([x_diff, x_mark[:, :, 1:]], dim=1)  # Kombinacija sa koverijatima
+            x_mark = x_mark[:, :, 1:]  # Prilagodite dimenzije x_mark da odgovaraju x_diff
+            x_combined = torch.cat([x_diff, x_mark], dim=1)  # Kombinacija sa koverijatima
             x = self.value_embedding(x_combined)
 
         # Primena dropout-a
