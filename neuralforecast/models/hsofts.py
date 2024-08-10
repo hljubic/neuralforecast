@@ -129,8 +129,37 @@ import torch
 import torch.nn as nn
 import math
 
+import torch
+import torch.nn as nn
 
-class DiffEmbedding(nn.Module):
+class EWMAEmbedding(nn.Module):
+    """
+    EWMA Embedding for smoothing the time series data.
+    """
+
+    def __init__(self, c_in, d_model, alpha=0.3, dropout=0.1):
+        super(EWMAEmbedding, self).__init__()
+        self.alpha = alpha  # Smoothing factor for EWMA
+        self.value_embedding = nn.Linear(c_in, d_model)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x, x_mark=None):
+        # x: [Batch, Variate, Time]
+        x = x.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
+
+        # Calculate EWMA for each variate in the series
+        ewma = torch.zeros_like(x)
+        ewma[:, 0, :] = x[:, 0, :]  # Set the first value as it is
+        for t in range(1, x.size(1)):
+            ewma[:, t, :] = self.alpha * x[:, t, :] + (1 - self.alpha) * ewma[:, t - 1, :]
+
+        # Apply the linear embedding to the EWMA-smoothed data
+        x_ewma_emb = self.value_embedding(ewma)
+
+        return self.dropout(x_ewma_emb)
+
+
+class DiffEmbeddingx(nn.Module):
     """
     Diff Embedding with sinus and cosinus transformation for diff(1).
     """
@@ -166,7 +195,7 @@ class DiffEmbedding(nn.Module):
         return self.dropout(x_diff_emb)
 
 
-class DiffEmbedding0(nn.Module):
+class DiffEmbedding(nn.Module):
     """
     Diff Embedding with added initial zero value to maintain dimensions.
     """
@@ -329,9 +358,10 @@ class HSOFTS(BaseMultivariate):
         self.c_out = n_series
         self.use_norm = use_norm
 
-        # Architecture: Zadržavamo oba embedding sloja
+        # Architecture: Tri embedding sloja
         self.value_embedding = DataEmbedding_inverted(input_size, hidden_size, dropout)
         self.diff_embedding = DiffEmbedding(input_size, hidden_size, dropout)
+        self.ewma_embedding = EWMAEmbedding(input_size, hidden_size, dropout=dropout)
 
         self.encoder = TransEncoder(
             [
@@ -360,12 +390,13 @@ class HSOFTS(BaseMultivariate):
 
         _, _, N = x_enc.shape
 
-        # Generisanje embeddinga za originalne vrednosti i za razlike
-        value_emb = self.value_embedding(x_enc, None)
+        # Generisanje embeddinga za originalne vrednosti, razlike, i EWMA
+        value_emb = self.value_embedding(x_enc)
         diff_emb = self.diff_embedding(x_enc)
+        ewma_emb = self.ewma_embedding(x_enc)
 
-        # Kombinacija oba embeddinga (npr. sabiranje)
-        combined_emb = value_emb + diff_emb  # Možete koristiti torch.cat za konkatenaciju
+        # Kombinacija svih embeddinga (npr. sabiranje)
+        combined_emb = value_emb + diff_emb + ewma_emb  # Možete koristiti torch.cat za konkatenaciju
 
         enc_out, attns = self.encoder(combined_emb, attn_mask=None)
         dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
