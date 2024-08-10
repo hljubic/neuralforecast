@@ -399,7 +399,7 @@ class HSOFTS(BaseMultivariate):
         # Architecture: Tri embedding sloja
         self.value_embedding = DataEmbedding_inverted(input_size, hidden_size, dropout)
         self.diff_embedding = DiffEmbedding(input_size, hidden_size, dropout)
-        self.ewma_embedding = EWMAEmbedding(input_size, hidden_size, dropout=dropout)
+        #self.ewma_embedding = EWMAEmbedding(input_size, hidden_size, dropout=dropout)
 
         self.encoder = TransEncoder(
             [
@@ -431,10 +431,10 @@ class HSOFTS(BaseMultivariate):
         # Generisanje embeddinga za originalne vrednosti, razlike, i EWMA
         value_emb = self.value_embedding(x_enc, None)
         diff_emb = self.diff_embedding(x_enc)
-        ewma_emb = self.ewma_embedding(x_enc)
+        #ewma_emb = self.ewma_embedding(x_enc)
 
         # Kombinacija svih embeddinga (npr. sabiranje)
-        combined_emb = value_emb + diff_emb + ewma_emb  # Možete koristiti torch.cat za konkatenaciju
+        combined_emb = value_emb + diff_emb #+ ewma_emb  # Možete koristiti torch.cat za konkatenaciju
 
         enc_out, attns = self.encoder(combined_emb, attn_mask=None)
         dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
