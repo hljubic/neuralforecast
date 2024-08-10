@@ -430,11 +430,11 @@ class HSOFTS(BaseMultivariate):
 
         # Generisanje embeddinga za originalne vrednosti, razlike, i EWMA
         value_emb = self.value_embedding(x_enc, None)
-        diff_emb = self.diff_embedding(x_enc)
-        #ewma_emb = self.ewma_embedding(x_enc)
+        #diff_emb = self.diff_embedding(x_enc)
+        ewma_emb = self.ewma_embedding(x_enc)
 
-        # Kombinacija svih embeddinga (npr. sabiranje)
-        combined_emb = value_emb + diff_emb #+ ewma_emb  # Možete koristiti torch.cat za konkatenaciju
+        # Kombinacija svih embeddinga (npr. sabiranje)+ diff_emb #
+        combined_emb = value_emb + ewma_emb  # Možete koristiti torch.cat za konkatenaciju
 
         enc_out, attns = self.encoder(combined_emb, attn_mask=None)
         dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
