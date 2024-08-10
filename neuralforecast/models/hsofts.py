@@ -321,7 +321,7 @@ class HSOFTS(BaseMultivariate):
         _, _, N = x_enc.shape
 
         # Generisanje embeddinga za originalne vrednosti i za razlike
-        value_emb = self.value_embedding(x_enc)
+        value_emb = self.value_embedding(x_enc, None)
         diff_emb = self.diff_embedding(x_enc)
 
         # Kombinacija oba embeddinga (npr. sabiranje)
