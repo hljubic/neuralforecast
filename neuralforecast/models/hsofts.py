@@ -117,9 +117,39 @@ class TemporalEmbedding(nn.Module):
 
 import torch
 import torch.nn as nn
+import torch
+import torch.nn as nn
 
 
 class DiffEmbedding(nn.Module):
+    """
+    Diff Embedding
+    """
+
+    def __init__(self, c_in, d_model, dropout=0.1):
+        super(DiffEmbedding, self).__init__()
+        self.value_embedding = nn.Linear(c_in, d_model)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x, x_mark=None):
+        # Permutacija dimenzija da bi bile u formatu [Batch, Variate, Time]
+        x = x.permute(0, 2, 1)
+        # Izračunavanje razlike prvog reda (diff(1))
+        x_diff = x[:, :, 1:] - x[:, :, :-1]
+
+        if x_mark is None:
+            x = self.value_embedding(x_diff)
+        else:
+            # Permutacija koverijata i njihova kombinacija sa razlikama
+            x_mark = x_mark.permute(0, 2, 1)
+            x_combined = torch.cat([x_diff, x_mark[:, :, 1:]], dim=1)  # Kombinacija sa koverijatima
+            x = self.value_embedding(x_combined)
+
+        # Primena dropout-a
+        return self.dropout(x)
+
+
+class DiffEmbedding2(nn.Module):
     def __init__(self, c_in, d_model, dropout=0.1):
         super(DiffEmbedding, self).__init__()
         self.value_embedding = nn.Linear(c_in, d_model)
