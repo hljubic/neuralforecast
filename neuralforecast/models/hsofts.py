@@ -268,6 +268,7 @@ class HSOFTS(BaseMultivariate):
             ]
         )
 
+        # Adjust the projection layer to match the input dimension
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
 
     def forecast(self, x_enc):
@@ -286,8 +287,11 @@ class HSOFTS(BaseMultivariate):
         value_emb = self.value_embedding(x_enc, None)
         diff_emb = self.diff_embedding(x_enc)
 
-        # Kombinacija oba embeddinga (npr. konkatenacija ili sabiranje)
-        combined_emb = value_emb + diff_emb  # Možete koristiti torch.cat za konkatenaciju ili torch.add za sabiranje
+        # Concatenate the embeddings along the feature dimension (dim=1)
+        combined_emb = torch.cat([value_emb, diff_emb], dim=1)  # Concatenation
+
+        # If combined_emb has more dimensions than expected, adjust projection accordingly
+        combined_emb = combined_emb.permute(0, 2, 1)  # Adjust shape to match (Batch, Time, Features)
 
         enc_out, attns = self.encoder(combined_emb, attn_mask=None)
         dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
