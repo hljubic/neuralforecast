@@ -140,7 +140,7 @@ class EWMAEmbedding(nn.Module):
     EWMA Embedding with forward and backward smoothing, followed by averaging.
     """
 
-    def __init__(self, c_in, d_model, alpha=0.3, dropout=0.1):
+    def __init__(self, c_in, d_model, alpha=0.1, dropout=0.1):
         super(EWMAEmbedding, self).__init__()
         self.alpha = alpha  # Smoothing factor for EWMA
         self.value_embedding = nn.Linear(c_in, d_model)
