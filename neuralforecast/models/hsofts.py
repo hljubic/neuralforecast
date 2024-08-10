@@ -289,9 +289,9 @@ class HSOFTS(BaseMultivariate):
         self.c_out = n_series
         self.use_norm = use_norm
 
-        # Architecture
-        self.enc_embedding = DiffEmbedding(input_size, hidden_size,
-                                           dropout)  # Koristi DiffEmbedding umesto DataEmbedding_inverted
+        # Architecture: Zadržavamo oba embedding sloja
+        self.value_embedding = DataEmbedding_inverted(input_size, hidden_size, dropout)
+        self.diff_embedding = DiffEmbedding(input_size, hidden_size, dropout)
 
         self.encoder = TransEncoder(
             [
@@ -319,8 +319,15 @@ class HSOFTS(BaseMultivariate):
             x_enc /= stdev
 
         _, _, N = x_enc.shape
-        enc_out = self.enc_embedding(x_enc)  # Koristi DiffEmbedding u forecast metodi
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+
+        # Generisanje embeddinga za originalne vrednosti i za razlike
+        value_emb = self.value_embedding(x_enc)
+        diff_emb = self.diff_embedding(x_enc)
+
+        # Kombinacija oba embeddinga (npr. sabiranje)
+        combined_emb = value_emb + diff_emb  # Možete koristiti torch.cat za konkatenaciju
+
+        enc_out, attns = self.encoder(combined_emb, attn_mask=None)
         dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
 
         # De-Normalization from Non-stationary Transformer
