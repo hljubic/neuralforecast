@@ -852,7 +852,44 @@ class _ScaledDotProductAttention(nn.Module):
         else:
             return output, attn_weights
 
+
 class DiffEmbedding(nn.Module):
+    """
+    Diff Embedding with sinus and cosinus transformation for diff(1).
+    """
+
+    def __init__(self, c_in, d_model, dropout=0.1):
+        super(DiffEmbedding, self).__init__()
+        self.d_model = d_model
+        self.value_embedding = nn.Linear(c_in, d_model)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x, x_mark=None):
+        # x: [Batch, Variate, Time]
+        x = x.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
+
+        # Calculate first order differences along the time dimension
+        x_diff = x[:, 1:, :] - x[:, :-1, :]
+
+        # Add an initial zero to keep the dimension consistent
+        initial_zero = torch.zeros(x.size(0), 1, x.size(2), device=x.device)  # [Batch, 1, Variate]
+        x_diff = torch.cat([initial_zero, x_diff], dim=1)  # [Batch, Time, Variate]
+
+        # Apply sinus and cosinus transformation
+        position = torch.arange(0, x_diff.size(1), device=x.device).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, self.d_model, 2, device=x.device) * -(math.log(10000.0) / self.d_model))
+
+        sinusoidal_embedding = torch.zeros(x_diff.size(0), x_diff.size(1), self.d_model, device=x.device)
+        sinusoidal_embedding[:, :, 0::2] = torch.sin(position * div_term)
+        sinusoidal_embedding[:, :, 1::2] = torch.cos(position * div_term)
+
+        # Apply the linear embedding to the diff values and combine with sinusoidal embedding
+        x_diff_emb = self.value_embedding(x_diff) + sinusoidal_embedding
+
+        return self.dropout(x_diff_emb)
+
+
+class DiffEmbedding3(nn.Module):
     def __init__(self, c_in, d_model, dropout=0.1):
         super(DiffEmbedding, self).__init__()
         self.value_embedding = nn.Linear(c_in, d_model)
