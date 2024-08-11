@@ -852,8 +852,28 @@ class _ScaledDotProductAttention(nn.Module):
         else:
             return output, attn_weights
 
-
 class DiffEmbedding(nn.Module):
+    def __init__(self, c_in, d_model, dropout=0.1):
+        super(DiffEmbedding, self).__init__()
+        self.value_embedding = nn.Linear(c_in, d_model)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x):
+        # Calculate diff(1) - differences of first order along the time dimension
+        x_diff = x[:, :, 1:] - x[:, :, :-1]
+
+        # Embedding for the differences
+        x_diff = x_diff.permute(0, 2, 1)  # Prebacujemo dimenzije da odgovaraju Linear sloju
+        x_diff = self.value_embedding(x_diff)
+        x_diff = x_diff.permute(0, 2, 1)  # Vraćamo nazad dimenzije
+
+        # Apply dropout
+        x_diff = self.dropout(x_diff)
+
+        return x_diff
+
+
+class DiffEmbedding2(nn.Module):
     def __init__(self, c_in, d_model, dropout=0.1):
         super(DiffEmbedding, self).__init__()
         self.value_embedding = nn.Linear(c_in, d_model)
