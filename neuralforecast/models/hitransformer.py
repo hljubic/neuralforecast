@@ -280,7 +280,7 @@ class HiTransformer(BaseMultivariate):
         self.enc_embedding = DataEmbedding_inverted(
             input_size, self.hidden_size, self.dropout
         )
-        self.diff_embedding = DiffEmbedding(c_in=n_series, d_model=self.hidden_size, dropout=self.dropout)
+        self.diff_embedding = DiffEmbedding(c_in=input_size, d_model=self.hidden_size, dropout=self.dropout)
 
         self.encoder = TransEncoder(
             [
