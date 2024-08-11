@@ -25,6 +25,7 @@ from neuralforecast.models.vanillatransformer import VanillaTransformer
 # from neuralforecast.models.informer import Informer
 # from neuralforecast.models.autoformer import Autoformer
 # from neuralforecast.models.patchtst import PatchTST
+# from neuralforecast.models.hpatchtst import HPatchTST
 from neuralforecast.models.dlinear import DLinear
 from neuralforecast.models.bitcn import BiTCN   
 from neuralforecast.models.tide import TiDE
