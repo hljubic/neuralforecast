@@ -78,9 +78,10 @@ class FullAttention(nn.Module):
             return (V.contiguous(), A)
         else:
             return (V.contiguous(), None)
+
 class DiffEmbedding(nn.Module):
     """
-    Embedding with EWMA applied directly on the value embeddings.
+    Embedding without EWMA and activation applied on the value embeddings.
     """
 
     def __init__(self, c_in, d_model, dropout=0.1):
@@ -88,8 +89,6 @@ class DiffEmbedding(nn.Module):
         self.value_embedding = nn.Linear(c_in, d_model)  # Value embedding sloj
         self.linear_layer = nn.Linear(d_model, d_model)  # Linear sloj
         self.batch_norm = nn.BatchNorm1d(d_model)  # Batch Normalization sloj
-        self.activation = nn.Tanh()  # tanh aktivacijska funkcija
-        self.alpha = 0.3  # Parametar za EWMA
 
         # Simple Attention mechanism
         self.attention = nn.MultiheadAttention(embed_dim=d_model, num_heads=1, dropout=dropout)
@@ -106,17 +105,8 @@ class DiffEmbedding(nn.Module):
         # Apply the value embedding
         x_emb = self.value_embedding(x)
 
-        # Apply EWMA smoothing from left to right
-        x_ewma_lr = self.ewma(x_emb, self.alpha)
-
-        # Apply EWMA smoothing from right to left
-        x_ewma_rl = self.ewma(x_emb.flip(dims=[1]), self.alpha).flip(dims=[1])
-
-        # Calculate the arithmetic mean of the two smoothed sequences
-        x_smooth = (x_ewma_lr + x_ewma_rl) / 2.0
-
         # Apply the Linear layer
-        x = self.linear_layer(x_smooth)
+        x = self.linear_layer(x_emb)
 
         # Apply Batch Normalization
         x = self.batch_norm(x.permute(0, 2, 1)).permute(0, 2, 1)
@@ -126,27 +116,10 @@ class DiffEmbedding(nn.Module):
         x, _ = self.attention(x, x, x)
         x = x.permute(1, 0, 2)  # Transpose back to [Batch, Time, d_model]
 
-        # Apply the Tanh activation
-        #x = self.activation(x)
-
         # Residual connection
-        x = x + x_smooth
+        x = x + x_emb
 
         return x
-
-    def ewma(self, x, alpha):
-        """
-        Computes the Exponential Weighted Moving Average (EWMA) of a sequence.
-        x: [Batch, Time, Variate]
-        alpha: smoothing factor
-        """
-        x_ewma = torch.zeros_like(x)
-        x_ewma[:, 0, :] = x[:, 0, :]  # Initialize with the first value
-
-        for t in range(1, x.size(1)):
-            x_ewma[:, t, :] = alpha * x[:, t, :] + (1 - alpha) * x_ewma[:, t-1, :]
-
-        return x_ewma
 
 
 class DiffEmbedding1234(nn.Module):
