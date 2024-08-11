@@ -80,7 +80,7 @@ class FullAttention(nn.Module):
             return (V.contiguous(), None)
 
 
-class DiffEmbedding(nn.Module):
+class DiffEmbedding3(nn.Module):
     """
     Diff Embedding with added initial zero value to maintain dimensions.
     """
@@ -112,7 +112,7 @@ class DiffEmbedding(nn.Module):
         return self.dropout(x)
 
 
-class DiffEmbedding2(nn.Module):
+class DiffEmbedding(nn.Module):
     def __init__(self, c_in, d_model, dropout=0.1):
         super(DiffEmbedding, self).__init__()
         self.value_embedding = nn.Linear(c_in, d_model)
