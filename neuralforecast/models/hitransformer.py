@@ -79,8 +79,42 @@ class FullAttention(nn.Module):
         else:
             return (V.contiguous(), None)
 
-
 class DiffEmbedding(nn.Module):
+    """
+    Diff Embedding with added initial zero value to maintain dimensions.
+    """
+
+    def __init__(self, c_in, d_model, dropout=0.1):
+        super(DiffEmbedding, self).__init__()
+        self.value_embedding = nn.Linear(c_in, d_model)
+        self.linear_layer = nn.Linear(d_model, d_model)  # Linear sloj
+        self.activation = nn.Tanh()  # tanh aktivacijska funkcija
+
+    def forward(self, x, x_mark=None):
+        # x: [Batch, Variate, Time]
+        x = x.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
+
+        # Calculate first order differences along the time dimension
+        x_diff = x[:, 1:, :] - x[:, :-1, :]
+
+        # Add an initial zero to keep the dimension consistent
+        initial_zero = torch.zeros(x.size(0), 1, x.size(2), device=x.device)  # [Batch, 1, Variate]
+        x_diff = torch.cat([initial_zero, x_diff], dim=1)  # [Batch, Time, Variate]
+
+        if x_mark is None:
+            x = self.value_embedding(x_diff)
+        else:
+            # The potential to take covariates (e.g. timestamps) as tokens
+            x_mark = x_mark.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
+            x = self.value_embedding(torch.cat([x_diff, x_mark], dim=2))  # Concatenate along the feature dimension
+
+        # Apply the additional Linear layer followed by Tanh activation
+        x = self.activation(self.linear_layer(x))
+
+        # x: [Batch, Time, d_model]
+        return x
+
+class DiffEmbedding24(nn.Module):
     """
     Diff Embedding with added initial zero value to maintain dimensions.
     """
