@@ -127,7 +127,7 @@ class DiffEmbedding(nn.Module):
         x = x.permute(1, 0, 2)  # Transpose back to [Batch, Time, d_model]
 
         # Apply the Tanh activation
-        x = self.activation(x)
+        #x = self.activation(x)
 
         # Residual connection
         x = x + x_smooth
