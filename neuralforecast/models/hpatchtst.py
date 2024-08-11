@@ -313,6 +313,7 @@ class HPatchTST_backbone(nn.Module):
                 head_dropout=head_dropout,
             )
 
+    # Modify the forward method to use diff_embedding:
     def forward(self, z):  # z: [bs x nvars x seq_len]
         # norm
         if self.revin:
@@ -320,19 +321,19 @@ class HPatchTST_backbone(nn.Module):
             z = self.revin_layer(z, "norm")
             z = z.permute(0, 2, 1)
 
-        # DiffEmbedding
+        # Apply DiffEmbedding
         z_diff = self.diff_embedding(z)
 
         # do patching
         if self.padding_patch == "end":
-            z = self.padding_patch_layer(z)
-        z = z.unfold(
+            z_diff = self.padding_patch_layer(z_diff)
+        z_diff = z_diff.unfold(
             dimension=-1, size=self.patch_len, step=self.stride
-        )  # z: [bs x nvars x patch_num x patch_len]
-        z = z.permute(0, 1, 3, 2)  # z: [bs x nvars x patch_len x patch_num]
+        )  # z_diff: [bs x nvars x patch_num x patch_len]
+        z_diff = z_diff.permute(0, 1, 3, 2)  # z_diff: [bs x nvars x patch_len x patch_num]
 
         # model
-        z = self.backbone(z)  # z: [bs x nvars x hidden_size x patch_num]
+        z = self.backbone(z_diff)  # z: [bs x nvars x hidden_size x patch_num]
         z = self.head(z)  # z: [bs x nvars x h]
 
         # denorm
