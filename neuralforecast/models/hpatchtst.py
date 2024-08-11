@@ -18,92 +18,6 @@ from ..common._base_windows import BaseWindows
 
 from ..losses.pytorch import MAE
 
-
-class DiffEmbeddingx(nn.Module):
-    """
-    Diff Embedding with sinus and cosinus transformation for diff(1).
-    """
-
-    def __init__(self, c_in, d_model, dropout=0.1):
-        super(DiffEmbedding, self).__init__()
-        self.d_model = d_model
-        self.value_embedding = nn.Linear(c_in, d_model)
-        self.dropout = nn.Dropout(p=dropout)
-
-    def forward(self, x, x_mark=None):
-        # x: [Batch, Variate, Time]
-        x = x.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
-
-        # Calculate first order differences along the time dimension
-        x_diff = x[:, 1:, :] - x[:, :-1, :]
-
-        # Add an initial zero to keep the dimension consistent
-        initial_zero = torch.zeros(x.size(0), 1, x.size(2), device=x.device)  # [Batch, 1, Variate]
-        x_diff = torch.cat([initial_zero, x_diff], dim=1)  # [Batch, Time, Variate]
-
-        # Apply sinus and cosinus transformation
-        position = torch.arange(0, x_diff.size(1), device=x.device).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, self.d_model, 2, device=x.device) * -(math.log(10000.0) / self.d_model))
-
-        sinusoidal_embedding = torch.zeros(x_diff.size(0), x_diff.size(1), self.d_model, device=x.device)
-        sinusoidal_embedding[:, :, 0::2] = torch.sin(position * div_term)
-        sinusoidal_embedding[:, :, 1::2] = torch.cos(position * div_term)
-
-        # Apply the linear embedding to the diff values and combine with sinusoidal embedding
-        x_diff_emb = self.value_embedding(x_diff) + sinusoidal_embedding
-
-        return self.dropout(x_diff_emb)
-
-class DiffEmbedding(nn.Module):
-    def __init__(self, c_in, d_model, dropout=0.1):
-        super(DiffEmbedding, self).__init__()
-        self.value_embedding = nn.Linear(c_in, d_model)
-        self.dropout = nn.Dropout(p=dropout)
-
-    def forward(self, x):
-        # Calculate diff(1) - differences of first order along the time dimension
-        x_diff = x[:, :, 1:] - x[:, :, :-1]
-
-        # Embedding for the differences
-        x_diff = self.value_embedding(x_diff)
-
-        # Apply dropout
-        x_diff = self.dropout(x_diff)
-
-        return x_diff
-
-
-class DiffEmbedding3(nn.Module):
-    """
-    Diff Embedding with added initial zero value to maintain dimensions.
-    """
-
-    def __init__(self, c_in, d_model, dropout=0.1):
-        super(DiffEmbedding, self).__init__()
-        self.value_embedding = nn.Linear(c_in, d_model)
-        self.dropout = nn.Dropout(p=dropout)
-
-    def forward(self, x, x_mark=None):
-        # x: [Batch, Variate, Time]
-        x = x.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
-
-        # Calculate first order differences along the time dimension
-        x_diff = x[:, 1:, :] - x[:, :-1, :]
-
-        # Add an initial zero to keep the dimension consistent
-        initial_zero = torch.zeros(x.size(0), 1, x.size(2), device=x.device)  # [Batch, 1, Variate]
-        x_diff = torch.cat([initial_zero, x_diff], dim=1)  # [Batch, Time, Variate]
-
-        if x_mark is None:
-            x = self.value_embedding(x_diff)
-        else:
-            # The potential to take covariates (e.g. timestamps) as tokens
-            x_mark = x_mark.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
-            x = self.value_embedding(torch.cat([x_diff, x_mark], dim=2))  # Concatenate along the feature dimension
-
-        # x: [Batch, Time, d_model]
-        return self.dropout(x)
-
 # %% ../../nbs/models.HPatchTST.ipynb 9
 class Transpose(nn.Module):
     """
@@ -341,6 +255,8 @@ class HPatchTST_backbone(nn.Module):
         if self.revin:
             self.revin_layer = RevIN(c_in, affine=affine, subtract_last=subtract_last)
 
+        self.diff_embedding = DiffEmbedding(c_in, hidden_size, dropout=dropout)
+
         # Patching
         self.patch_len = patch_len
         self.stride = stride
@@ -403,6 +319,9 @@ class HPatchTST_backbone(nn.Module):
             z = z.permute(0, 2, 1)
             z = self.revin_layer(z, "norm")
             z = z.permute(0, 2, 1)
+
+        # DiffEmbedding
+        z_diff = self.diff_embedding(z)
 
         # do patching
         if self.padding_patch == "end":
@@ -513,9 +432,6 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
 
         # Positional encoding
         self.W_pos = positional_encoding(pe, learn_pe, q_len, hidden_size)
-        self.diff_embedding = DiffEmbedding(patch_len, hidden_size, dropout)
-
-        #self.diff_embedding = DiffEmbedding(q_len, hidden_size, 0.1)
 
         # Residual dropout
         self.dropout = nn.Dropout(dropout)
@@ -548,22 +464,7 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
         u = torch.reshape(
             x, (x.shape[0] * x.shape[1], x.shape[2], x.shape[3])
         )  # u: [bs * nvars x patch_num x hidden_size]
-
-        # Apply DiffEmbedding
-        u_diff = torch.reshape(
-            x, (x.shape[0], x.shape[1], x.shape[3], x.shape[2])
-        )  # u_diff: [bs x nvars x hidden_size x patch_num]
-        u_diff = self.diff_embedding(u_diff)  # u_diff: [bs x nvars x hidden_size x patch_num]
-
-        # Reshape u_diff to match u's shape
-        u_diff = torch.reshape(
-            u_diff, (u.shape[0], u.shape[1], u.shape[2])
-        )  # u_diff: [bs * nvars x patch_num x hidden_size]
-
         u = self.dropout(u + self.W_pos)  # u: [bs * nvars x patch_num x hidden_size]
-
-        # Combine the original encoding with the diff encoding
-        u = u + u_diff  # u: [bs * nvars x patch_num x hidden_size]
 
         # Encoder
         z = self.encoder(u)  # z: [bs * nvars x patch_num x hidden_size]
@@ -953,6 +854,25 @@ class _ScaledDotProductAttention(nn.Module):
             return output, attn_weights, attn_scores
         else:
             return output, attn_weights
+
+
+class DiffEmbedding(nn.Module):
+    def __init__(self, c_in, d_model, dropout=0.1):
+        super(DiffEmbedding, self).__init__()
+        self.value_embedding = nn.Linear(c_in, d_model)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x):
+        # Calculate diff(1) - differences of first order along the time dimension
+        x_diff = x[:, :, 1:] - x[:, :, :-1]
+
+        # Embedding for the differences
+        x_diff = self.value_embedding(x_diff)
+
+        # Apply dropout
+        x_diff = self.dropout(x_diff)
+
+        return x_diff
 
 # %% ../../nbs/models.HPatchTST.ipynb 17
 class HPatchTST(BaseWindows):
