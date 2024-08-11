@@ -540,9 +540,9 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
 
         n_vars = x.shape[1]
         # Input encoding
+        x = self.diff_embedding(x)
         x = x.permute(0, 1, 3, 2)  # x: [bs x nvars x patch_num x patch_len]
         x = self.W_P(x)  # x: [bs x nvars x patch_num x hidden_size]
-        x = self.diff_embedding(x)
 
         u = torch.reshape(
             x, (x.shape[0] * x.shape[1], x.shape[2], x.shape[3])
