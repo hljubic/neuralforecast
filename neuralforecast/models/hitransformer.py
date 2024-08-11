@@ -81,6 +81,38 @@ class FullAttention(nn.Module):
 
 
 class DiffEmbedding(nn.Module):
+    """
+    Diff Embedding with added initial zero value to maintain dimensions.
+    """
+
+    def __init__(self, c_in, d_model, dropout=0.1):
+        super(DiffEmbedding, self).__init__()
+        self.value_embedding = nn.Linear(c_in, d_model)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x, x_mark=None):
+        # x: [Batch, Variate, Time]
+        x = x.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
+
+        # Calculate first order differences along the time dimension
+        x_diff = x[:, 1:, :] - x[:, :-1, :]
+
+        # Add an initial zero to keep the dimension consistent
+        initial_zero = torch.zeros(x.size(0), 1, x.size(2), device=x.device)  # [Batch, 1, Variate]
+        x_diff = torch.cat([initial_zero, x_diff], dim=1)  # [Batch, Time, Variate]
+
+        if x_mark is None:
+            x = self.value_embedding(x_diff)
+        else:
+            # The potential to take covariates (e.g. timestamps) as tokens
+            x_mark = x_mark.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
+            x = self.value_embedding(torch.cat([x_diff, x_mark], dim=2))  # Concatenate along the feature dimension
+
+        # x: [Batch, Time, d_model]
+        return self.dropout(x)
+
+
+class DiffEmbedding2(nn.Module):
     def __init__(self, c_in, d_model, dropout=0.1):
         super(DiffEmbedding, self).__init__()
         self.value_embedding = nn.Linear(c_in, d_model)
@@ -248,10 +280,7 @@ class HiTransformer(BaseMultivariate):
         self.enc_embedding = DataEmbedding_inverted(
             input_size, self.hidden_size, self.dropout
         )
-
-        self.diff_embedding = DiffEmbedding(
-            c_in=input_size, d_model=self.hidden_size, dropout=self.dropout
-        )
+        self.diff_embedding = DiffEmbedding(c_in=n_series, d_model=self.hidden_size, dropout=self.dropout)
 
         self.encoder = TransEncoder(
             [
@@ -286,30 +315,22 @@ class HiTransformer(BaseMultivariate):
             x_enc /= stdev
 
         _, _, N = x_enc.shape  # B L N
-        # B: batch_size;       E: hidden_size;
-        # L: input_size;       S: horizon(h);
-        # N: number of variate (tokens), can also include covariates
 
         # Embedding
-        # B L N -> B N E                (B L N -> B L E in the vanilla Transformer)
-        enc_out = self.enc_embedding(
-            x_enc, None
-        )  # covariates (e.g timestamp) can be also embedded as tokens
+        # DataEmbedding_inverted
+        enc_out_data = self.enc_embedding(x_enc, None)
 
-        # Apply the diff embedding
-        diff_out = self.diff_embedding(x_enc)
+        # DiffEmbedding
+        enc_out_diff = self.diff_embedding(x_enc)
 
-        # Combine enc_out and diff_out (e.g., by addition)
-        combined_out = enc_out + diff_out
+        # Combine the two embeddings
+        enc_out = enc_out_data + enc_out_diff  # This can be a sum, concatenation, etc. based on the desired operation
 
-        # B N E -> B N E                (B L E -> B L E in the vanilla Transformer)
-        # the dimensions of embedded time series have been inverted, and then processed by native attn, layernorm, and ffn modules
-        enc_out, attns = self.encoder(combined_out, attn_mask=None)
+        # Encode the combined embeddings
+        enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
-        # B N E -> B N S -> B S N
-        dec_out = self.projector(enc_out).permute(0, 2, 1)[
-            :, :, :N
-        ]  # filter the covariates
+        # Project to the desired output shape
+        dec_out = self.projector(enc_out).permute(0, 2, 1)[:, :, :N]
 
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
@@ -322,7 +343,7 @@ class HiTransformer(BaseMultivariate):
         insample_y = windows_batch["insample_y"]
 
         y_pred = self.forecast(insample_y)
-        y_pred = y_pred[:, -self.h :, :]
+        y_pred = y_pred[:, -self.h:, :]
         y_pred = self.loss.domain_map(y_pred)
 
         # domain_map might have squeezed the last dimension in case n_series == 1
