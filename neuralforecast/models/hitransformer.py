@@ -323,10 +323,10 @@ class HiTransformer(BaseMultivariate):
         # DiffEmbedding
         enc_out_diff = self.diff_embedding(x_enc)
 
-        # Combine the two embeddings
-        enc_out = enc_out_data + enc_out_diff  # This can be a sum, concatenation, etc. based on the desired operation
+        # Concatenate the two embeddings along the feature dimension
+        enc_out = torch.cat([enc_out_data, enc_out_diff], dim=2)  # Concatenate along the feature dimension
 
-        # Encode the combined embeddings
+        # Encode the concatenated embeddings
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
         # Project to the desired output shape
