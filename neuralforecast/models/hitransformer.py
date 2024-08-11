@@ -134,7 +134,7 @@ class DiffEmbedding(nn.Module):
 
         return x_ewma
 
-class DiffEmbedding4(nn.Module):
+class DiffEmbedding444(nn.Module):
     """
     Diff Embedding with added initial zero value to maintain dimensions.
     """
@@ -160,15 +160,11 @@ class DiffEmbedding4(nn.Module):
             x_mark = x_mark.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
             x_diff = torch.cat([x_diff, x_mark], dim=2)  # Concatenate along the feature dimension
 
-        return x_diff
-        #return self.linear_layer(x_diff)
-        '''
         # Apply the Linear layer followed by Tanh activation
         x = self.activation(self.linear_layer(x_diff))
 
         # x: [Batch, Time, d_model]
         return x
-        '''
 
 class DiffEmbedding44(nn.Module):
     """
