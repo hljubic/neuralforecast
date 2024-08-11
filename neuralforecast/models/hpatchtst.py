@@ -54,8 +54,26 @@ class DiffEmbeddingx(nn.Module):
 
         return self.dropout(x_diff_emb)
 
-
 class DiffEmbedding(nn.Module):
+    def __init__(self, c_in, d_model, dropout=0.1):
+        super(DiffEmbedding, self).__init__()
+        self.value_embedding = nn.Linear(c_in, d_model)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x):
+        # Calculate diff(1) - differences of first order along the time dimension
+        x_diff = x[:, :, 1:] - x[:, :, :-1]
+
+        # Embedding for the differences
+        x_diff = self.value_embedding(x_diff)
+
+        # Apply dropout
+        x_diff = self.dropout(x_diff)
+
+        return x_diff
+
+
+class DiffEmbedding3(nn.Module):
     """
     Diff Embedding with added initial zero value to maintain dimensions.
     """
