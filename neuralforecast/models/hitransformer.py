@@ -360,7 +360,7 @@ class HiTransformer(BaseMultivariate):
         self.enc_embedding = DataEmbedding_inverted(
             input_size, self.hidden_size, self.dropout
         )
-        self.diff_embedding = DiffEmbedding(c_in=input_size, d_model=self.hidden_size, dropout=self.dropout)
+        self.diff_embedding = nn.Linear(input_size, self.hidden_size)#DiffEmbedding(c_in=input_size, d_model=self.hidden_size, dropout=self.dropout)
 
         # Adjust the input size of the encoder if concatenating embeddings
         self.encoder = TransEncoder(
@@ -403,6 +403,8 @@ class HiTransformer(BaseMultivariate):
         #enc_out_data = self.enc_embedding(x_enc, None)
 
         # DiffEmbedding
+        #enc_out = self.diff_embedding(x_enc)
+
         enc_out = self.diff_embedding(x_enc)
 
         # Concatenate the two embeddings along the feature dimension
