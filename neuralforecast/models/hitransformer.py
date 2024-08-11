@@ -142,10 +142,6 @@ class EWMAEmbedding(nn.Module):
         # Average the forward and backward EWMA
         ewma = (ewma_forward + ewma_backward) / 2
 
-        # Apply the linear embedding to the EWMA-smoothed data
-        x_ewma_emb = self.value_embedding(ewma)
-
-        return self.dropout(x_ewma_emb)
 
 
 # %% ../../nbs/models.HiTransformer.ipynb 11
@@ -299,7 +295,6 @@ class HiTransformer(BaseMultivariate):
             input_size, self.hidden_size, self.dropout
         )
         self.diff_embedding = DiffEmbedding(c_in=input_size, d_model=self.hidden_size, dropout=self.dropout)
-        self.ewma_embedding = EWMAEmbedding(c_in=input_size, d_model=self.hidden_size, dropout=self.dropout)
 
         # Adjust the input size of the encoder if concatenating embeddings
         self.encoder = TransEncoder(
@@ -309,21 +304,21 @@ class HiTransformer(BaseMultivariate):
                         FullAttention(
                             False, self.factor, attention_dropout=self.dropout
                         ),
-                        self.hidden_size * 3,  # Adjust for concatenated embeddings
+                        self.hidden_size * 2,  # Adjust for concatenated embeddings
                         self.n_heads,
                     ),
-                    self.hidden_size * 3,  # Adjust for concatenated embeddings
+                    self.hidden_size * 2,  # Adjust for concatenated embeddings
                     self.d_ff,
                     dropout=self.dropout,
                     activation=F.gelu,
                 )
                 for l in range(self.e_layers)
             ],
-            norm_layer=torch.nn.LayerNorm(self.hidden_size * 3),
+            norm_layer=torch.nn.LayerNorm(self.hidden_size * 2),
         )
 
         # Adjust the projector layer to match the new hidden size
-        self.projector = nn.Linear(self.hidden_size * 3, h, bias=True)
+        self.projector = nn.Linear(self.hidden_size * 2, h, bias=True)
 
     def forecast(self, x_enc):
         if self.use_norm:
@@ -343,10 +338,9 @@ class HiTransformer(BaseMultivariate):
 
         # DiffEmbedding
         enc_out_diff = self.diff_embedding(x_enc)
-        enc_out_ewma = self.ewma_embedding(x_enc)
 
         # Concatenate the two embeddings along the feature dimension
-        enc_out = torch.cat([enc_out_data, enc_out_diff, enc_out_ewma], dim=2)  # Concatenate along the feature dimension
+        enc_out = torch.cat([enc_out_data, enc_out_diff], dim=2)  # Concatenate along the feature dimension
 
         # Encode the concatenated embeddings
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
