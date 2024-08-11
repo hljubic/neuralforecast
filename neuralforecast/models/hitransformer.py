@@ -88,6 +88,61 @@ class DiffEmbedding(nn.Module):
         super(DiffEmbedding, self).__init__()
         self.linear_layer = nn.Linear(c_in, d_model)  # Linear sloj
         self.activation = nn.Tanh()  # tanh aktivacijska funkcija
+        self.alpha = 0.1  # Parametar za EWMA
+
+    def forward(self, x, x_mark=None):
+        # x: [Batch, Variate, Time]
+        x = x.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
+
+        # Calculate first order differences along the time dimension
+        x_diff = x[:, 1:, :] - x[:, :-1, :]
+
+        # Add an initial zero to keep the dimension consistent
+        initial_zero = torch.zeros(x.size(0), 1, x.size(2), device=x.device)  # [Batch, 1, Variate]
+        x_diff = torch.cat([initial_zero, x_diff], dim=1)  # [Batch, Time, Variate]
+
+        if x_mark is not None:
+            # The potential to take covariates (e.g. timestamps) as tokens
+            x_mark = x_mark.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
+            x_diff = torch.cat([x_diff, x_mark], dim=2)  # Concatenate along the feature dimension
+
+        # Apply EWMA smoothing from left to right
+        x_ewma_lr = self.ewma(x_diff, self.alpha)
+
+        # Apply EWMA smoothing from right to left
+        x_ewma_rl = self.ewma(x_diff.flip(dims=[1]), self.alpha).flip(dims=[1])
+
+        # Calculate the arithmetic mean of the two smoothed sequences
+        x_smooth = (x_ewma_lr + x_ewma_rl) / 2.0
+
+        # Apply the Linear layer followed by Tanh activation
+        x = self.activation(self.linear_layer(x_smooth))
+
+        return x
+
+    def ewma(self, x, alpha):
+        """
+        Computes the Exponential Weighted Moving Average (EWMA) of a sequence.
+        x: [Batch, Time, Variate]
+        alpha: smoothing factor
+        """
+        x_ewma = torch.zeros_like(x)
+        x_ewma[:, 0, :] = x[:, 0, :]  # Initialize with the first value
+
+        for t in range(1, x.size(1)):
+            x_ewma[:, t, :] = alpha * x[:, t, :] + (1 - alpha) * x_ewma[:, t-1, :]
+
+        return x_ewma
+
+class DiffEmbedding4(nn.Module):
+    """
+    Diff Embedding with added initial zero value to maintain dimensions.
+    """
+
+    def __init__(self, c_in, d_model, dropout=0.1):
+        super(DiffEmbedding, self).__init__()
+        self.linear_layer = nn.Linear(c_in, d_model)  # Linear sloj
+        self.activation = nn.Tanh()  # tanh aktivacijska funkcija
 
     def forward(self, x, x_mark=None):
         # x: [Batch, Variate, Time]
