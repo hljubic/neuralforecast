@@ -78,10 +78,9 @@ class FullAttention(nn.Module):
             return (V.contiguous(), A)
         else:
             return (V.contiguous(), None)
-
 class DiffEmbedding(nn.Module):
     """
-    Diff Embedding with added initial zero value to maintain dimensions.
+    Embedding with EWMA applied directly on the value embeddings.
     """
 
     def __init__(self, c_in, d_model, dropout=0.1):
@@ -99,20 +98,13 @@ class DiffEmbedding(nn.Module):
         # x: [Batch, Variate, Time]
         x = x.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
 
-        # Calculate first order differences along the time dimension
-        x_diff = x[:, 1:, :] - x[:, :-1, :]
-
-        # Add an initial zero to keep the dimension consistent
-        initial_zero = torch.zeros(x.size(0), 1, x.size(2), device=x.device)  # [Batch, 1, Variate]
-        x_diff = torch.cat([initial_zero, x_diff], dim=1)  # [Batch, Time, Variate]
-
         if x_mark is not None:
             # The potential to take covariates (e.g. timestamps) as tokens
             x_mark = x_mark.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
-            x_diff = torch.cat([x_diff, x_mark], dim=2)  # Concatenate along the feature dimension
+            x = torch.cat([x, x_mark], dim=2)  # Concatenate along the feature dimension
 
         # Apply the value embedding
-        x_emb = self.value_embedding(x_diff)
+        x_emb = self.value_embedding(x)
 
         # Apply EWMA smoothing from left to right
         x_ewma_lr = self.ewma(x_emb, self.alpha)
@@ -155,6 +147,7 @@ class DiffEmbedding(nn.Module):
             x_ewma[:, t, :] = alpha * x[:, t, :] + (1 - alpha) * x_ewma[:, t-1, :]
 
         return x_ewma
+
 
 class DiffEmbedding1234(nn.Module):
     """
