@@ -316,23 +316,30 @@ class HPatchTST_backbone(nn.Module):
     def forward(self, z):  # z: [bs x nvars x seq_len]
         # norm
         if self.revin:
-            z = z.permute(0, 2, 1)
+            z = z.permute(0, 2, 1)  # z: [bs x seq_len x nvars]
             z = self.revin_layer(z, "norm")
-            z = z.permute(0, 2, 1)
+            z = z.permute(0, 2, 1)  # z: [bs x nvars x seq_len]
 
-        # Apply DiffEmbedding and handle the sequence length
-        z_diff = self.diff_embedding(z)
+        # Apply DiffEmbedding
+        z_diff = self.diff_embedding(z)  # z_diff: [bs x nvars x (seq_len - 1) x hidden_size]
 
-        # Adjust shape if necessary to match expected input
-        z_diff = z_diff.permute(0, 2, 1)  # Adjust shape to [bs x seq_len-1 x hidden_size]
+        # Permute to match the expected shape for patching and backbone
+        z_diff = z_diff.permute(0, 3, 1, 2)  # z_diff: [bs x hidden_size x nvars x (seq_len - 1)]
 
-        # do patching
+        # Ensure the patching is consistent with the new sequence length
+        patch_num = (z_diff.shape[-1] - self.patch_len) // self.stride + 1
+
         if self.padding_patch == "end":
-            z_diff = self.padding_patch_layer(z_diff)
-        z_diff = z_diff.unfold(
-            dimension=-1, size=self.patch_len, step=self.stride
-        )  # z_diff: [bs x nvars x patch_num x patch_len]
-        z_diff = z_diff.permute(0, 1, 3, 2)  # z_diff: [bs x nvars x patch_len x patch_num]
+            padding_size = (0, self.stride)
+            z_diff = F.pad(z_diff, padding_size)
+            patch_num += 1
+
+        z_diff = z_diff.unfold(-1, self.patch_len,
+                               self.stride)  # z_diff: [bs x hidden_size x nvars x patch_num x patch_len]
+        z_diff = z_diff.permute(0, 2, 4, 3, 1)  # z_diff: [bs x nvars x patch_len x patch_num x hidden_size]
+
+        # Reshape to match expected input for backbone
+        z_diff = z_diff.reshape(z_diff.shape[0], z_diff.shape[1], -1, self.hidden_size)
 
         # model
         z = self.backbone(z_diff)  # z: [bs x nvars x hidden_size x patch_num]
