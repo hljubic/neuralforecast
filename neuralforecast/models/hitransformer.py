@@ -78,7 +78,6 @@ class FullAttention(nn.Module):
             return (V.contiguous(), A)
         else:
             return (V.contiguous(), None)
-
 class DiffEmbedding(nn.Module):
     """
     Diff Embedding with added initial zero value to maintain dimensions.
@@ -86,7 +85,8 @@ class DiffEmbedding(nn.Module):
 
     def __init__(self, c_in, d_model, dropout=0.1):
         super(DiffEmbedding, self).__init__()
-        self.linear_layer = nn.Linear(c_in, d_model)  # Linear sloj
+        self.value_embedding = nn.Linear(c_in, d_model)  # Value embedding sloj
+        self.linear_layer = nn.Linear(d_model, d_model)  # Linear sloj
         self.activation = nn.Tanh()  # tanh aktivacijska funkcija
         self.alpha = 0.1  # Parametar za EWMA
 
@@ -106,17 +106,20 @@ class DiffEmbedding(nn.Module):
             x_mark = x_mark.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
             x_diff = torch.cat([x_diff, x_mark], dim=2)  # Concatenate along the feature dimension
 
+        # Apply the value embedding
+        x_emb = self.value_embedding(x_diff)
+
         # Apply EWMA smoothing from left to right
-        x_ewma_lr = self.ewma(x_diff, self.alpha)
+        x_ewma_lr = self.ewma(x_emb, self.alpha)
 
         # Apply EWMA smoothing from right to left
-        x_ewma_rl = self.ewma(x_diff.flip(dims=[1]), self.alpha).flip(dims=[1])
+        x_ewma_rl = self.ewma(x_emb.flip(dims=[1]), self.alpha).flip(dims=[1])
 
         # Calculate the arithmetic mean of the two smoothed sequences
         x_smooth = (x_ewma_lr + x_ewma_rl) / 2.0
 
         # Apply the Linear layer followed by Tanh activation
-        x = self.activation(self.linear_layer(x_smooth))
+        x = self.linear_layer(x_smooth)
 
         return x
 
