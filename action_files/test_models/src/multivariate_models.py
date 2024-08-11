@@ -11,6 +11,7 @@ from neuralforecast.models.hsofts import HSOFTS
 from neuralforecast.models.tsmixer import TSMixer
 from neuralforecast.models.tsmixerx import TSMixerx
 from neuralforecast.models.itransformer import iTransformer
+from neuralforecast.models.hitransformer import HiTransformer
 from neuralforecast.models.stemgnn import StemGNN
 from neuralforecast.models.mlpmultivariate import MLPMultivariate
 from neuralforecast.models.timemixer import TimeMixer
