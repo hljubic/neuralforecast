@@ -89,7 +89,7 @@ class DiffEmbedding(nn.Module):
         self.linear_layer = nn.Linear(d_model, d_model)  # Linear sloj
         self.batch_norm = nn.BatchNorm1d(d_model)  # Batch Normalization sloj
         self.activation = nn.Tanh()  # tanh aktivacijska funkcija
-        self.alpha = 0.03  # Parametar za EWMA
+        self.alpha = 0.3  # Parametar za EWMA
 
         # Simple Attention mechanism
         self.attention = nn.MultiheadAttention(embed_dim=d_model, num_heads=1, dropout=dropout)
