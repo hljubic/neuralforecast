@@ -80,7 +80,7 @@ class FullAttention(nn.Module):
             return (V.contiguous(), None)
 
 
-class DiffEmbedding3(nn.Module):
+class DiffEmbedding(nn.Module):
     """
     Diff Embedding with added initial zero value to maintain dimensions.
     """
@@ -112,23 +112,41 @@ class DiffEmbedding3(nn.Module):
         return self.dropout(x)
 
 
-class DiffEmbedding(nn.Module):
-    def __init__(self, c_in, d_model, dropout=0.1):
-        super(DiffEmbedding, self).__init__()
+class EWMAEmbedding(nn.Module):
+    """
+    EWMA Embedding with forward and backward smoothing, followed by averaging.
+    """
+
+    def __init__(self, c_in, d_model, alpha=0.1, dropout=0.1):
+        super(EWMAEmbedding, self).__init__()
+        self.alpha = alpha  # Smoothing factor for EWMA
         self.value_embedding = nn.Linear(c_in, d_model)
         self.dropout = nn.Dropout(p=dropout)
 
-    def forward(self, x):
-        # Calculate diff(1) - differences of first order along the time dimension
-        x_diff = x[:, :, 1:] - x[:, :, :-1]
+    def forward(self, x, x_mark=None):
+        # x: [Batch, Variate, Time]
+        x = x.permute(0, 2, 1)  # Transpose to [Batch, Time, Variate]
 
-        # Embedding for the differences
-        x_diff = self.value_embedding(x_diff)
+        # Calculate EWMA from left to right (forward)
+        ewma_forward = torch.zeros_like(x)
+        ewma_forward[:, 0, :] = x[:, 0, :]  # Set the first value as it is
+        for t in range(1, x.size(1)):
+            ewma_forward[:, t, :] = self.alpha * x[:, t, :] + (1 - self.alpha) * ewma_forward[:, t - 1, :]
 
-        # Apply dropout
-        x_diff = self.dropout(x_diff)
+        # Calculate EWMA from right to left (backward)
+        ewma_backward = torch.zeros_like(x)
+        ewma_backward[:, -1, :] = x[:, -1, :]  # Set the last value as it is
+        for t in range(x.size(1) - 2, -1, -1):
+            ewma_backward[:, t, :] = self.alpha * x[:, t, :] + (1 - self.alpha) * ewma_backward[:, t + 1, :]
 
-        return x_diff
+        # Average the forward and backward EWMA
+        ewma = (ewma_forward + ewma_backward) / 2
+
+        # Apply the linear embedding to the EWMA-smoothed data
+        x_ewma_emb = self.value_embedding(ewma)
+
+        return self.dropout(x_ewma_emb)
+
 
 # %% ../../nbs/models.HiTransformer.ipynb 11
 class DataEmbedding_inverted(nn.Module):
@@ -281,6 +299,7 @@ class HiTransformer(BaseMultivariate):
             input_size, self.hidden_size, self.dropout
         )
         self.diff_embedding = DiffEmbedding(c_in=input_size, d_model=self.hidden_size, dropout=self.dropout)
+        self.ewma_embedding = EWMAEmbedding(c_in=input_size, d_model=self.hidden_size, dropout=self.dropout)
 
         # Adjust the input size of the encoder if concatenating embeddings
         self.encoder = TransEncoder(
@@ -290,21 +309,21 @@ class HiTransformer(BaseMultivariate):
                         FullAttention(
                             False, self.factor, attention_dropout=self.dropout
                         ),
-                        self.hidden_size * 2,  # Adjust for concatenated embeddings
+                        self.hidden_size * 3,  # Adjust for concatenated embeddings
                         self.n_heads,
                     ),
-                    self.hidden_size * 2,  # Adjust for concatenated embeddings
+                    self.hidden_size * 3,  # Adjust for concatenated embeddings
                     self.d_ff,
                     dropout=self.dropout,
                     activation=F.gelu,
                 )
                 for l in range(self.e_layers)
             ],
-            norm_layer=torch.nn.LayerNorm(self.hidden_size * 2),
+            norm_layer=torch.nn.LayerNorm(self.hidden_size * 3),
         )
 
         # Adjust the projector layer to match the new hidden size
-        self.projector = nn.Linear(self.hidden_size * 2, h, bias=True)
+        self.projector = nn.Linear(self.hidden_size * 3, h, bias=True)
 
     def forecast(self, x_enc):
         if self.use_norm:
@@ -324,9 +343,10 @@ class HiTransformer(BaseMultivariate):
 
         # DiffEmbedding
         enc_out_diff = self.diff_embedding(x_enc)
+        enc_out_ewma = self.ewma_embedding(x_enc)
 
         # Concatenate the two embeddings along the feature dimension
-        enc_out = torch.cat([enc_out_data, enc_out_diff], dim=2)  # Concatenate along the feature dimension
+        enc_out = torch.cat([enc_out_data, enc_out_diff, enc_out_ewma], dim=2)  # Concatenate along the feature dimension
 
         # Encode the concatenated embeddings
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
