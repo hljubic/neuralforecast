@@ -255,8 +255,6 @@ class HPatchTST_backbone(nn.Module):
         if self.revin:
             self.revin_layer = RevIN(c_in, affine=affine, subtract_last=subtract_last)
 
-        self.diff_embedding = DiffEmbedding(c_in, hidden_size, dropout=dropout)
-
         # Patching
         self.patch_len = patch_len
         self.stride = stride
@@ -316,33 +314,20 @@ class HPatchTST_backbone(nn.Module):
     def forward(self, z):  # z: [bs x nvars x seq_len]
         # norm
         if self.revin:
-            z = z.permute(0, 2, 1)  # z: [bs x seq_len x nvars]
+            z = z.permute(0, 2, 1)
             z = self.revin_layer(z, "norm")
-            z = z.permute(0, 2, 1)  # z: [bs x nvars x seq_len]
+            z = z.permute(0, 2, 1)
 
-        # Apply DiffEmbedding
-        z_diff = self.diff_embedding(z)  # z_diff: [bs x nvars x (seq_len - 1) x hidden_size]
-
-        # Permute to match the expected shape for patching and backbone
-        z_diff = z_diff.permute(0, 3, 1, 2)  # z_diff: [bs x hidden_size x nvars x (seq_len - 1)]
-
-        # Ensure the patching is consistent with the new sequence length
-        patch_num = (z_diff.shape[-1] - self.patch_len) // self.stride + 1
-
+        # do patching
         if self.padding_patch == "end":
-            padding_size = (0, self.stride)
-            z_diff = F.pad(z_diff, padding_size)
-            patch_num += 1
-
-        z_diff = z_diff.unfold(-1, self.patch_len,
-                               self.stride)  # z_diff: [bs x hidden_size x nvars x patch_num x patch_len]
-        z_diff = z_diff.permute(0, 2, 4, 3, 1)  # z_diff: [bs x nvars x patch_len x patch_num x hidden_size]
-
-        # Reshape to match expected input for backbone
-        z_diff = z_diff.reshape(z_diff.shape[0], z_diff.shape[1], -1, self.hidden_size)
+            z = self.padding_patch_layer(z)
+        z = z.unfold(
+            dimension=-1, size=self.patch_len, step=self.stride
+        )  # z: [bs x nvars x patch_num x patch_len]
+        z = z.permute(0, 1, 3, 2)  # z: [bs x nvars x patch_len x patch_num]
 
         # model
-        z = self.backbone(z_diff)  # z: [bs x nvars x hidden_size x patch_num]
+        z = self.backbone(z)  # z: [bs x nvars x hidden_size x patch_num]
         z = self.head(z)  # z: [bs x nvars x h]
 
         # denorm
@@ -442,6 +427,7 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
 
         # Positional encoding
         self.W_pos = positional_encoding(pe, learn_pe, q_len, hidden_size)
+        self.diff_embedding = DiffEmbedding(c_in, hidden_size, dropout=dropout)
 
         # Residual dropout
         self.dropout = nn.Dropout(dropout)
@@ -471,20 +457,21 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
         x = x.permute(0, 1, 3, 2)  # x: [bs x nvars x patch_num x patch_len]
         x = self.W_P(x)  # x: [bs x nvars x patch_num x hidden_size]
 
-        u = torch.reshape(
-            x, (x.shape[0] * x.shape[1], x.shape[2], x.shape[3])
-        )  # u: [bs * nvars x patch_num x hidden_size]
-        u = self.dropout(u + self.W_pos)  # u: [bs * nvars x patch_num x hidden_size]
+        # Apply DiffEmbedding
+        x_diff = self.diff_embedding(x)  # x_diff: [bs x nvars x patch_num-1 x hidden_size]
+
+        # Combine PositionalEncoding with DiffEmbedding using torch.cat
+        u = torch.cat([x[:, :, 1:, :], x_diff], dim=-1)  # u: [bs x nvars x patch_num-1 x 2*hidden_size]
+        u = self.dropout(u + self.W_pos[:, :, 1:])  # Apply positional encoding only on valid patches
 
         # Encoder
-        z = self.encoder(u)  # z: [bs * nvars x patch_num x hidden_size]
+        z = self.encoder(u)  # z: [bs * nvars x patch_num-1 x 2*hidden_size]
         z = torch.reshape(
             z, (-1, n_vars, z.shape[-2], z.shape[-1])
-        )  # z: [bs x nvars x patch_num x hidden_size]
-        z = z.permute(0, 1, 3, 2)  # z: [bs x nvars x hidden_size x patch_num]
+        )  # z: [bs x nvars x patch_num-1 x 2*hidden_size]
+        z = z.permute(0, 1, 3, 2)  # z: [bs x nvars x 2*hidden_size x patch_num-1]
 
         return z
-
 
 class TSTEncoder(nn.Module):
     """
