@@ -303,7 +303,8 @@ class HiTransformer(BaseMultivariate):
             norm_layer=torch.nn.LayerNorm(self.hidden_size * 2),
         )
 
-        self.projector = nn.Linear(self.hidden_size, h, bias=True)
+        # Adjust the projector layer to match the new hidden size
+        self.projector = nn.Linear(self.hidden_size * 2, h, bias=True)
 
     def forecast(self, x_enc):
         if self.use_norm:
