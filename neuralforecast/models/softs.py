@@ -78,7 +78,6 @@ class STAD(nn.Module):
 
         return output, None
 
-
 # %% ../../nbs/models.softs.ipynb 10
 class SOFTS(BaseMultivariate):
     """SOFTS

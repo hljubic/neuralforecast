@@ -506,21 +506,21 @@ class HiTransformer(BaseMultivariate):
                         FullAttention(
                             False, self.factor, attention_dropout=self.dropout
                         ),
-                        self.hidden_size * 1,  # Adjust for concatenated embeddings
+                        self.hidden_size * 2,  # Adjust for concatenated embeddings
                         self.n_heads,
                     ),
-                    self.hidden_size * 1,  # Adjust for concatenated embeddings
+                    self.hidden_size * 2,  # Adjust for concatenated embeddings
                     self.d_ff,
                     dropout=self.dropout,
                     activation=F.gelu,
                 )
                 for l in range(self.e_layers)
             ],
-            norm_layer=torch.nn.LayerNorm(self.hidden_size * 1),
+            norm_layer=torch.nn.LayerNorm(self.hidden_size * 2),
         )
 
         # Adjust the projector layer to match the new hidden size
-        self.projector = nn.Linear(self.hidden_size * 1, h, bias=True)
+        self.projector = nn.Linear(self.hidden_size * 2, h, bias=True)
 
     def forecast(self, x_enc):
         if self.use_norm:
@@ -536,13 +536,13 @@ class HiTransformer(BaseMultivariate):
 
         # Embedding
         # DataEmbedding_inverted
-        #enc_out_data = self.enc_embedding(x_enc, None)
+        enc_out_data = self.enc_embedding(x_enc, None)
 
         # DiffEmbedding
-        enc_out = self.diff_embedding(x_enc)
+        enc_out_diff = self.diff_embedding(x_enc)
 
         # Concatenate the two embeddings along the feature dimension
-        #enc_out = torch.cat([enc_out_data, enc_out_diff], dim=2)  # Concatenate along the feature dimension
+        enc_out = torch.cat([enc_out_data, enc_out_diff], dim=2)  # Concatenate along the feature dimension
 
         # Encode the concatenated embeddings
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
