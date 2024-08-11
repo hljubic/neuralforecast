@@ -79,6 +79,25 @@ class FullAttention(nn.Module):
         else:
             return (V.contiguous(), None)
 
+
+class DiffEmbedding(nn.Module):
+    def __init__(self, c_in, d_model, dropout=0.1):
+        super(DiffEmbedding, self).__init__()
+        self.value_embedding = nn.Linear(c_in, d_model)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x):
+        # Calculate diff(1) - differences of first order along the time dimension
+        x_diff = x[:, :, 1:] - x[:, :, :-1]
+
+        # Embedding for the differences
+        x_diff = self.value_embedding(x_diff)
+
+        # Apply dropout
+        x_diff = self.dropout(x_diff)
+
+        return x_diff
+
 # %% ../../nbs/models.HiTransformer.ipynb 11
 class DataEmbedding_inverted(nn.Module):
     """
@@ -229,6 +248,10 @@ class HiTransformer(BaseMultivariate):
         self.enc_embedding = DataEmbedding_inverted(
             input_size, self.hidden_size, self.dropout
         )
+        # Architecture
+        self.diff_embedding = DiffEmbedding(
+            input_size, self.hidden_size, self.dropout
+        )
 
         self.encoder = TransEncoder(
             [
@@ -271,7 +294,8 @@ class HiTransformer(BaseMultivariate):
         # B L N -> B N E                (B L N -> B L E in the vanilla Transformer)
         enc_out = self.enc_embedding(
             x_enc, None
-        )  # covariates (e.g timestamp) can be also embedded as tokens
+        )  + self.diff_embedding(x_enc) # covariates (e.g timestamp) can be also embedded as tokens
+
 
         # B N E -> B N E                (B L E -> B L E in the vanilla Transformer)
         # the dimensions of embedded time series has been inverted, and then processed by native attn, layernorm and ffn modules
