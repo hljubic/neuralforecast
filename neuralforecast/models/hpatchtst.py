@@ -544,7 +544,6 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
         # Input encoding
         x = x.permute(0, 1, 3, 2)  # x: [bs x nvars x patch_num x patch_len]
         x = self.W_P(x)  # x: [bs x nvars x patch_num x hidden_size]
-        x = self.diff_embedding(x)
 
         u = torch.reshape(
             x, (x.shape[0] * x.shape[1], x.shape[2], x.shape[3])
@@ -556,10 +555,15 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
         )  # u_diff: [bs x nvars x hidden_size x patch_num]
         u_diff = self.diff_embedding(u_diff)  # u_diff: [bs x nvars x hidden_size x patch_num]
 
+        # Reshape u_diff to match u's shape
+        u_diff = torch.reshape(
+            u_diff, (u.shape[0], u.shape[1], u.shape[2])
+        )  # u_diff: [bs * nvars x patch_num x hidden_size]
+
         u = self.dropout(u + self.W_pos)  # u: [bs * nvars x patch_num x hidden_size]
 
         # Combine the original encoding with the diff encoding
-        u = u + u_diff.reshape(u.shape)  # u: [bs * nvars x patch_num x hidden_size]
+        u = u + u_diff  # u: [bs * nvars x patch_num x hidden_size]
 
         # Encoder
         z = self.encoder(u)  # z: [bs * nvars x patch_num x hidden_size]
