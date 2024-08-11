@@ -248,9 +248,9 @@ class HiTransformer(BaseMultivariate):
         self.enc_embedding = DataEmbedding_inverted(
             input_size, self.hidden_size, self.dropout
         )
-        # Architecture
+
         self.diff_embedding = DiffEmbedding(
-            input_size, self.hidden_size, self.dropout
+            c_in=input_size, d_model=self.hidden_size, dropout=self.dropout
         )
 
         self.encoder = TransEncoder(
@@ -288,18 +288,23 @@ class HiTransformer(BaseMultivariate):
         _, _, N = x_enc.shape  # B L N
         # B: batch_size;       E: hidden_size;
         # L: input_size;       S: horizon(h);
-        # N: number of variate (tokens), can also includes covariates
+        # N: number of variate (tokens), can also include covariates
 
         # Embedding
         # B L N -> B N E                (B L N -> B L E in the vanilla Transformer)
         enc_out = self.enc_embedding(
             x_enc, None
-        )  + self.diff_embedding(x_enc) # covariates (e.g timestamp) can be also embedded as tokens
+        )  # covariates (e.g timestamp) can be also embedded as tokens
 
+        # Apply the diff embedding
+        diff_out = self.diff_embedding(x_enc)
+
+        # Combine enc_out and diff_out (e.g., by addition)
+        combined_out = enc_out + diff_out
 
         # B N E -> B N E                (B L E -> B L E in the vanilla Transformer)
-        # the dimensions of embedded time series has been inverted, and then processed by native attn, layernorm and ffn modules
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+        # the dimensions of embedded time series have been inverted, and then processed by native attn, layernorm, and ffn modules
+        enc_out, attns = self.encoder(combined_out, attn_mask=None)
 
         # B N E -> B N S -> B S N
         dec_out = self.projector(enc_out).permute(0, 2, 1)[
