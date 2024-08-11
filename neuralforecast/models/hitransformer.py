@@ -282,6 +282,7 @@ class HiTransformer(BaseMultivariate):
         )
         self.diff_embedding = DiffEmbedding(c_in=input_size, d_model=self.hidden_size, dropout=self.dropout)
 
+        # Adjust the input size of the encoder if concatenating embeddings
         self.encoder = TransEncoder(
             [
                 TransEncoderLayer(
@@ -289,17 +290,17 @@ class HiTransformer(BaseMultivariate):
                         FullAttention(
                             False, self.factor, attention_dropout=self.dropout
                         ),
-                        self.hidden_size,
+                        self.hidden_size * 2,  # Adjust for concatenated embeddings
                         self.n_heads,
                     ),
-                    self.hidden_size,
+                    self.hidden_size * 2,  # Adjust for concatenated embeddings
                     self.d_ff,
                     dropout=self.dropout,
                     activation=F.gelu,
                 )
                 for l in range(self.e_layers)
             ],
-            norm_layer=torch.nn.LayerNorm(self.hidden_size),
+            norm_layer=torch.nn.LayerNorm(self.hidden_size * 2),
         )
 
         self.projector = nn.Linear(self.hidden_size, h, bias=True)
