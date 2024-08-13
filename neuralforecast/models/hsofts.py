@@ -195,40 +195,28 @@ class HSOFTS(BaseMultivariate):
         # Architecture
         self.enc_embedding = DataEmbedding_inverted(input_size, hidden_size, dropout)
 
-        self.encoder3 = TransEncoder(
-            [
-                TransEncoderLayer(
-                    STAD(hidden_size, d_core),
-                    hidden_size,
-                    d_ff,
-                    dropout=dropout,
-                    activation=F.gelu,
-                )
-                for l in range(e_layers)
-            ]
-        )
+        # Zamena TransEncoder sa nn.Linear
+        self.encoder = nn.Linear(self.hidden_size, self.hidden_size)
 
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
         self.projectors_num = 3
-        self.hidden_size = hidden_size
-
-        self.encoder = nn.Linear(self.hidden_size, self.hidden_size)
 
         self.projector = nn.Linear(self.hidden_size, h, bias=True)
 
-        # Define a list of projectors, one for each segment
+        # Definišite listu projektora, jedan za svaki segment
         self.projectors = nn.ModuleList(
-            [nn.Linear(self.hidden_size, h, bias=True) for _ in range(self.projectors_num)])
+            [nn.Linear(self.hidden_size, h, bias=True) for _ in range(self.projectors_num)]
+        )
 
-        # Final Linear layer
+        # Finalni linearni sloj
         self.final = nn.Linear(h * self.projectors_num, h, bias=True)
 
-        # Define additional projectors after final
+        # Definišite dodatne projektore nakon finalnog sloja
         self.additional_projectors = nn.ModuleList(
-            [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
+            [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)]
+        )
 
     def ewma(self, data, alpha):
-        # Implementacija EWMA
         result = torch.zeros_like(data)
         result[:, 0, :] = data[:, 0, :]
         for t in range(1, data.size(1)):
@@ -241,9 +229,8 @@ class HSOFTS(BaseMultivariate):
             data = self.ewma(data, alpha)
         return data
 
-
     def forecast(self, x_enc):
-        # Normalization from Non-stationary Transformer
+        # Normalizacija iz Non-stationary Transformera
         if self.use_norm:
             means = x_enc.mean(1, keepdim=True).detach()
             x_enc = x_enc - means
@@ -255,36 +242,38 @@ class HSOFTS(BaseMultivariate):
             smooth_left_copy = self.multi_ewma(x_enc, base_alpha=0.1, iterations=5)
             smooth_right_copy = self.multi_ewma(x_enc.flip(1), base_alpha=0.1, iterations=5).flip(1)
 
-            # Izračunaj x_enc nakon multi_ewma
             x_enc = (smooth_left_copy + smooth_right_copy) / 2
 
         _, _, N = x_enc.shape
 
         enc_out = self.enc_embedding(x_enc, None)
-        enc_out, attns = self.encoder(enc_out)
 
-        # Generate predictions from each segment using corresponding projectors
+        # Zamena TransEncoder sa nn.Linear
+        enc_out = self.encoder(enc_out)
+
+        # Generisanje predikcija iz svakog segmenta korišćenjem odgovarajućih projektora
         dec_outs = []
         for i, projector in enumerate(self.projectors):
             dec_outs.append(projector(enc_out))
 
-        # Concatenate the outputs from all projectors
+        # Konkatenacija izlaza iz svih projektora
         dec_out = torch.cat(dec_outs, dim=2)
 
-        # Pass through the final linear layer
+        # Prolaz kroz finalni linearni sloj
         dec_out = self.final(dec_out)
 
-        # Additional projectors after final
+        # Dodatni projektori nakon finalnog sloja
         final_outs = []
         for projector in self.additional_projectors:
             final_outs.append(projector(dec_out).permute(0, 2, 1))
 
         dec_out = torch.cat(final_outs, dim=1)
 
-        # De-Normalization from Non-stationary Transformer
+        # De-normalizacija iz Non-stationary Transformera
         if self.use_norm:
             dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
+
         return dec_out
 
     def forward(self, windows_batch):

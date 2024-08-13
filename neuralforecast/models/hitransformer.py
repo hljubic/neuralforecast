@@ -230,25 +230,7 @@ class HiTransformer(BaseMultivariate):
             input_size, self.hidden_size, self.dropout
         )
 
-        self.encoder2 = TransEncoder(
-            [
-                TransEncoderLayer(
-                    AttentionLayer(
-                        FullAttention(
-                            False, self.factor, attention_dropout=self.dropout
-                        ),
-                        self.hidden_size,
-                        self.n_heads,
-                    ),
-                    self.hidden_size,
-                    self.d_ff,
-                    dropout=self.dropout,
-                    activation=F.gelu,
-                )
-                for l in range(self.e_layers)
-            ],
-            norm_layer=torch.nn.LayerNorm(self.hidden_size),
-        )
+        # Zamena TransEncoder sa nn.Linear
         self.encoder = nn.Linear(self.hidden_size, self.hidden_size)
 
         self.projectors_num = 3
@@ -262,11 +244,10 @@ class HiTransformer(BaseMultivariate):
         self.final = nn.Linear(h * self.projectors_num, h, bias=True)
 
         # Define additional projectors after final
-        self.additional_projectors = nn.ModuleList([nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
-
+        self.additional_projectors = nn.ModuleList(
+            [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
 
     def ewma(self, data, alpha):
-        # Implementacija EWMA
         result = torch.zeros_like(data)
         result[:, 0, :] = data[:, 0, :]
         for t in range(1, data.size(1)):
@@ -281,35 +262,25 @@ class HiTransformer(BaseMultivariate):
 
     def forecast(self, x_enc):
         if self.use_norm:
-            # Normalization from Non-stationary Transformer
             means = x_enc.mean(1, keepdim=True).detach()
             x_enc = x_enc - means
             stdev = torch.sqrt(
                 torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
             )
             x_enc /= stdev
-            
+
             smooth_left_copy = self.multi_ewma(x_enc, base_alpha=0.1, iterations=5)
             smooth_right_copy = self.multi_ewma(x_enc.flip(1), base_alpha=0.1, iterations=5).flip(1)
 
-            # Izračunaj x_enc nakon multi_ewma
             x_enc = (smooth_left_copy + smooth_right_copy) / 2
 
-        _, _, N = x_enc.shape  # B L N
-        # B: batch_size;       E: hidden_size;
-        # L: input_size;       S: horizon(h);
-        # N: number of variate (tokens), can also includes covariates
+        _, _, N = x_enc.shape
 
         # Embedding
-        # B L N -> B N E                (B L N -> B L E in the vanilla Transformer)
-        enc_out = self.enc_embedding(
-            x_enc, None
-        )  # covariates (e.g timestamp) can be also embedded as tokens
+        enc_out = self.enc_embedding(x_enc, None)
 
-        # B N E -> B N E                (B L E -> B L E in the vanilla Transformer)
-        # the dimensions of embedded time series has been inverted, and then processed by native attn, layernorm and ffn modules
-        enc_out, attns = self.encoder(enc_out)
-
+        # Zamenjeni enkoder
+        enc_out = self.encoder(enc_out)
 
         # Generate predictions from each segment using corresponding projectors
         dec_outs = []
@@ -330,7 +301,6 @@ class HiTransformer(BaseMultivariate):
         dec_out = torch.cat(final_outs, dim=1)
 
         if self.use_norm:
-            # De-Normalization from Non-stationary Transformer
             dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
 
