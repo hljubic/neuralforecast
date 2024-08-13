@@ -251,12 +251,10 @@ class HiTransformer(BaseMultivariate):
         )
 
         # Define before_projectors: 3 * projectors_num for each segment
-        self.before_projectors = nn.ModuleList(
-            [nn.Linear(self.hidden_size, self.hidden_size, bias=True) for _ in range(3 * self.projectors_num)])
+        self.before_projectors = nn.ModuleList([nn.Linear(self.hidden_size, self.hidden_size, bias=True) for _ in range(3 * self.projectors_num)])
 
         # Define projectors, one for each set of before_projectors
-        self.projectors = nn.ModuleList(
-            [nn.Linear(self.hidden_size, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
+        self.projectors = nn.ModuleList([nn.Linear(self.hidden_size, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
 
     def forecast(self, x_enc):
         if self.use_norm:
@@ -269,6 +267,7 @@ class HiTransformer(BaseMultivariate):
             x_enc /= stdev
 
         enc_out = self.enc_embedding(x_enc, None)
+
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
         # Generate predictions using before_projectors and projectors
@@ -283,53 +282,9 @@ class HiTransformer(BaseMultivariate):
             avg_out = (out1 + out2 + out3) / 3
 
             # Pass the averaged output through the corresponding projector
-            final_out = self.projectors[i](avg_out)#.permute(0, 2, 1)
+            final_out = self.projectors[i](avg_out).permute(0, 2, 1)
 
             dec_outs.append(final_out)
-
-        # Concatenate the outputs from all projectors
-        dec_out = torch.cat(dec_outs, dim=2)
-
-        if self.use_norm:
-            # De-Normalization from Non-stationary Transformer
-            dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-            dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-
-        return dec_out
-
-    def forecast2(self, x_enc):
-        if self.use_norm:
-            # Normalization from Non-stationary Transformer
-            means = x_enc.mean(1, keepdim=True).detach()
-            x_enc = x_enc - means
-            stdev = torch.sqrt(
-                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            x_enc /= stdev
-
-        enc_out = self.enc_embedding(x_enc, None)
-
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
-
-        # Generate predictions using before_projectors and projectors
-        dec_outs = []
-        for i in range(self.projectors_num):
-            # Apply three before_projectors for each projector
-            out1 = self.before_projectors[3 * i](enc_out)
-            out2 = self.before_projectors[3 * i + 1](enc_out)
-            out3 = self.before_projectors[3 * i + 2](enc_out)
-
-            # Pass each through its corresponding projector
-            final_out1 = self.projectors[i](out1).permute(0, 2, 1)
-            final_out2 = self.projectors[i](out2).permute(0, 2, 1)
-            final_out3 = self.projectors[i](out3).permute(0, 2, 1)
-
-            # Collect all three final outputs for this projector
-            dec_outs.append(final_out1)
-            dec_outs.append(final_out2)
-            dec_outs.append(final_out3)
-
-
 
         # Concatenate the outputs from all projectors
         dec_out = torch.cat(dec_outs, dim=2)
