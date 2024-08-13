@@ -156,6 +156,7 @@ class HSOFTS(BaseMultivariate):
         optimizer_kwargs=None,
         lr_scheduler=None,
         lr_scheduler_kwargs=None,
+        projectors_num = 1,
         **trainer_kwargs
     ):
 
@@ -191,6 +192,7 @@ class HSOFTS(BaseMultivariate):
         self.dec_in = n_series
         self.c_out = n_series
         self.use_norm = use_norm
+        self.projectors_num = projectors_num
 
         # Architecture
         self.enc_embedding = DataEmbedding_inverted(input_size, hidden_size, dropout)
