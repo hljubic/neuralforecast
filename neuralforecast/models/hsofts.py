@@ -195,7 +195,7 @@ class HSOFTS(BaseMultivariate):
         # Architecture
         self.enc_embedding = DataEmbedding_inverted(input_size, hidden_size, dropout)
 
-        self.encoder = TransEncoder(
+        self.encoder3 = TransEncoder(
             [
                 TransEncoderLayer(
                     STAD(hidden_size, d_core),
@@ -207,6 +207,7 @@ class HSOFTS(BaseMultivariate):
                 for l in range(e_layers)
             ]
         )
+        self.encoder = nn.Linear(self.input_size, self.hidden_size)
 
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
         self.projectors_num = 3
@@ -239,7 +240,7 @@ class HSOFTS(BaseMultivariate):
             data = self.ewma(data, alpha)
         return data
 
-    
+
     def forecast(self, x_enc):
         # Normalization from Non-stationary Transformer
         if self.use_norm:

@@ -221,7 +221,7 @@ class HPatchTST_backbone(nn.Module):
         max_seq_len: Optional[int] = 1024,
         n_layers: int = 3,
         hidden_size=128,
-        n_heads=161231231231,
+        n_heads=16,
         d_k: Optional[int] = None,
         d_v: Optional[int] = None,
         linear_hidden_size: int = 256,

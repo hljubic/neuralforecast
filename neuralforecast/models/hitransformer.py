@@ -230,7 +230,7 @@ class HiTransformer(BaseMultivariate):
             input_size, self.hidden_size, self.dropout
         )
 
-        self.encoder = TransEncoder(
+        self.encoder2 = TransEncoder(
             [
                 TransEncoderLayer(
                     AttentionLayer(
@@ -249,6 +249,7 @@ class HiTransformer(BaseMultivariate):
             ],
             norm_layer=torch.nn.LayerNorm(self.hidden_size),
         )
+        self.encoder = nn.Linear(self.input_size, self.hidden_size)
 
         self.projectors_num = 3
 
