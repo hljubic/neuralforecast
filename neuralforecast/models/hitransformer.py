@@ -260,8 +260,9 @@ class HiTransformer(BaseMultivariate):
             result[:, t, :] = alpha * data[:, t, :] + (1 - alpha) * result[:, t - 1, :]
         return result
 
-    def multi_ewma(data, alpha, iterations):
-        for _ in range(iterations):
+    def multi_ewma(self, data, base_alpha, iterations):
+        for i in range(iterations):
+            alpha = base_alpha * (i + 1)
             data = self.ewma(data, alpha)
         return data
 
@@ -274,22 +275,12 @@ class HiTransformer(BaseMultivariate):
                 torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
             )
             x_enc /= stdev
-            # Zaglađivanje sa EWMA
-            # Izračunaj prvobitni smooth_left i smooth_right
-            smooth_left = self.ewma(x_enc, alpha=0.5)
-            smooth_right = self.ewma(x_enc.flip(1), alpha=0.5).flip(1)
+            
+            smooth_left_copy = self.multi_ewma(x_enc, base_alpha=0.4, iterations=5)
+            smooth_right_copy = self.multi_ewma(x_enc.flip(1), base_alpha=0.4, iterations=5).flip(1)
 
-            # Napravi kopije smooth_left i smooth_right
-            smooth_left_copy = smooth_left.clone()
-            smooth_right_copy = smooth_right.clone()
-
-            # Ponovi multi_ewma više puta na kopijama
-            for i in range(10):
-                smooth_left_copy = self.multi_ewma(smooth_left_copy, alpha=0.5 * (i + 1), iterations=5)
-                smooth_right_copy = self.multi_ewma(smooth_right_copy, alpha=0.5 * (i + 1), iterations=5)
-
-            # Izračunaj x_enc nakon for petlje
-            x_enc = (smooth_left_copy + smooth_right_copy.flip(1)) / 2
+            # Izračunaj x_enc nakon multi_ewma
+            x_enc = (smooth_left_copy + smooth_right_copy) / 2
 
         _, _, N = x_enc.shape  # B L N
         # B: batch_size;       E: hidden_size;
