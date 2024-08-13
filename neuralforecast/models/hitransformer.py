@@ -263,13 +263,13 @@ class HiTransformer(BaseMultivariate):
             )
             x_enc /= stdev
 
-        _, _, N = x_enc.shape  # B L N
+        BB, LL, NN = x_enc.shape  # B L N
         enc_out = self.enc_embedding(x_enc, None)
 
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
         # Calculate the segment lengths dynamically
-        segment_len = N // 3
+        segment_len = LL // 3
 
         # Split the encoded output into three segments based on dynamic indices
         segment1 = enc_out[:, :, :segment_len]
