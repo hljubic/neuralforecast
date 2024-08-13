@@ -252,11 +252,6 @@ class HiTransformer(BaseMultivariate):
 
         self.projector = nn.Linear(self.hidden_size, h, bias=True)
 
-
-    def rescale(self, data, min_val, max_val):
-        # Reskaliranje na opseg min-max samo za diff_data
-        return min_val + (data - data.min(dim=1, keepdim=True)[0]) * (max_val - min_val) / (data.max(dim=1, keepdim=True)[0] - data.min(dim=1, keepdim=True)[0] + 1e-5)
-
     def ewma(self, data, alpha):
         # Implementacija EWMA
         result = torch.zeros_like(data)
@@ -264,6 +259,11 @@ class HiTransformer(BaseMultivariate):
         for t in range(1, data.size(1)):
             result[:, t, :] = alpha * data[:, t, :] + (1 - alpha) * result[:, t - 1, :]
         return result
+
+    def multi_ewma(data, alpha, iterations):
+        for _ in range(iterations):
+            data = self.ewma(data, alpha)
+        return data
 
     def forecast(self, x_enc):
         if self.use_norm:
@@ -275,16 +275,21 @@ class HiTransformer(BaseMultivariate):
             )
             x_enc /= stdev
             # Zaglađivanje sa EWMA
+            # Izračunaj prvobitni smooth_left i smooth_right
+            smooth_left = self.ewma(x_enc, alpha=0.5)
+            smooth_right = self.ewma(x_enc.flip(1), alpha=0.5).flip(1)
 
-            # Čuvanje min i max vrednosti pre zaglađivanja
-            min_val = x_enc.min(dim=1, keepdim=True)[0]
-            max_val = x_enc.max(dim=1, keepdim=True)[0]
+            # Napravi kopije smooth_left i smooth_right
+            smooth_left_copy = smooth_left.clone()
+            smooth_right_copy = smooth_right.clone()
 
-            smooth_left = self.ewma(x_enc, alpha=0.04)
-            smooth_right = self.ewma(x_enc.flip(1), alpha=0.04).flip(1)
-            x_enc = (smooth_left + smooth_right) / 2
+            # Ponovi multi_ewma više puta na kopijama
+            for i in range(10):
+                smooth_left_copy = self.multi_ewma(smooth_left_copy, alpha=0.5 * (i + 1), iterations=5)
+                smooth_right_copy = self.multi_ewma(smooth_right_copy, alpha=0.5 * (i + 1), iterations=5)
 
-            x_enc = self.rescale(x_enc, min_val, max_val)
+            # Izračunaj x_enc nakon for petlje
+            x_enc = (smooth_left_copy + smooth_right_copy.flip(1)) / 2
 
         _, _, N = x_enc.shape  # B L N
         # B: batch_size;       E: hidden_size;
