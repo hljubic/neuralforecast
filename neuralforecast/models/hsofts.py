@@ -87,7 +87,7 @@ class AdaptiveSTAD(nn.Module):
     def __init__(self, d_series, d_core):
         super(AdaptiveSTAD, self).__init__()
 
-        self.temporal_embedding = TemporalEmbedding(d_series, max_len)
+        self.temporal_embedding = TemporalEmbedding(d_series, 5000)
         self.gen1 = nn.Linear(d_series, d_series)
         self.gen2 = nn.Linear(d_series, d_core)
 
@@ -287,14 +287,13 @@ class HSOFTS(BaseMultivariate):
             ]
         )
 
-        # Define a list of projectors, one for each segment
-        self.projectors = nn.ModuleList([nn.Linear(hidden_size, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
+        self.hidden_size = hidden_size
 
-        # Final Linear layer
-        self.final = nn.Linear(h, h, bias=True)
+        # Define before_projectors: 3 * projectors_num for each segment
+        self.before_projectors = nn.ModuleList([nn.Linear(self.hidden_size, self.hidden_size, bias=True) for _ in range(3 * self.projectors_num)])
 
-        # Define additional projectors after final
-        self.additional_projectors = nn.ModuleList([nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
+        # Define projectors, one for each set of before_projectors
+        self.projectors = nn.ModuleList([nn.Linear(self.hidden_size, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
 
 
     def forecast(self, x_enc):
@@ -311,23 +310,24 @@ class HSOFTS(BaseMultivariate):
         enc_out = self.enc_embedding(x_enc, None)
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
-        # Generate predictions from each segment using corresponding projectors
+        # Generate predictions using before_projectors and projectors
         dec_outs = []
-        for i, projector in enumerate(self.projectors):
-            dec_outs.append(projector(enc_out))
+        for i in range(self.projectors_num):
+            # Apply three before_projectors for each projector
+            out1 = self.before_projectors[3 * i](enc_out)
+            out2 = self.before_projectors[3 * i + 1](enc_out)
+            out3 = self.before_projectors[3 * i + 2](enc_out)
+
+            # Calculate the arithmetic mean of the three outputs
+            avg_out = (out1 + out2 + out3) / 3
+
+            # Pass the averaged output through the corresponding projector
+            final_out = self.projectors[i](avg_out).permute(0, 2, 1)
+
+            dec_outs.append(final_out)
 
         # Concatenate the outputs from all projectors
-        dec_out = torch.cat(dec_outs, dim=2)
-
-        # Pass through the final linear layer
-        dec_out = self.final(dec_out)
-
-        # Additional projectors after final
-        final_outs = []
-        for projector in self.additional_projectors:
-            final_outs.append(projector(dec_out).permute(0, 2, 1))
-
-        dec_out = torch.cat(final_outs, dim=1)
+        dec_out = torch.cat(dec_outs, dim=1)
 
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
