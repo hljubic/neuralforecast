@@ -283,7 +283,7 @@ class HiTransformer(BaseMultivariate):
             avg_out = (out1 + out2 + out3) / 3
 
             # Pass the averaged output through the corresponding projector
-            final_out = self.projectors[i](avg_out).permute(0, 2, 1)
+            final_out = self.projectors[i](avg_out)#.permute(0, 2, 1)
 
             dec_outs.append(final_out)
 
