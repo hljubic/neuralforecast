@@ -51,13 +51,13 @@ def PositionalEncoding(q_len, hidden_size, normalize=True):
     pe = torch.zeros(q_len, hidden_size)
     position = torch.arange(0, q_len).unsqueeze(1)
     div_term = torch.exp(
-        torch.arange(0, hidden_size, 2) * -(math.log(100.0) / hidden_size)
+        torch.arange(0, hidden_size, 2) * -(math.log(10000.0) / hidden_size)
     )
     pe[:, 0::2] = torch.sin(position * div_term)
-    pe[:, 1::2] = torch.sin(position * div_term)
+    pe[:, 1::2] = torch.cos(position * div_term)
     if normalize:
         pe = pe - pe.mean()
-        pe = pe / (pe.std() * 100)
+        pe = pe / (pe.std() * 10)
     return pe
 
 
@@ -221,7 +221,7 @@ class HPatchTST_backbone(nn.Module):
         max_seq_len: Optional[int] = 1024,
         n_layers: int = 3,
         hidden_size=128,
-        n_heads=16,
+        n_heads=161231231231,
         d_k: Optional[int] = None,
         d_v: Optional[int] = None,
         linear_hidden_size: int = 256,
@@ -401,8 +401,8 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
         d_v=None,
         linear_hidden_size=256,
         norm="BatchNorm",
-        attn_dropout=0.9,
-        dropout=0.9,
+        attn_dropout=0.0,
+        dropout=0.0,
         act="gelu",
         store_attn=False,
         key_padding_mask="auto",
@@ -449,20 +449,6 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
             n_layers=n_layers,
             store_attn=store_attn,
         )
-
-    def ewma(self, data, alpha):
-        # Implementacija EWMA
-        result = torch.zeros_like(data)
-        result[:, 0, :] = data[:, 0, :]
-        for t in range(1, data.size(1)):
-            result[:, t, :] = alpha * data[:, t, :] + (1 - alpha) * result[:, t - 1, :]
-        return result
-
-    def multi_ewma(self, data, base_alpha, iterations):
-        for i in range(iterations):
-            alpha = base_alpha * (i + 1)
-            data = self.ewma(data, alpha)
-        return data
 
     def forward(self, x) -> torch.Tensor:  # x: [bs x nvars x patch_len x patch_num]
 
