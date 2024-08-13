@@ -274,16 +274,10 @@ class HiTransformer(BaseMultivariate):
 
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
-        # Calculate the segment lengths dynamically
-        segment_len = enc_out.shape[2]# // self.projectors_num
-
         # Generate predictions from each segment using corresponding projectors
         dec_outs = []
         for i, projector in enumerate(self.projectors):
-            start_idx = i * segment_len
-            end_idx = (i + 1) * segment_len
-            segment = enc_out[:, :, start_idx:end_idx]
-            dec_outs.append(projector(segment))
+            dec_outs.append(projector(enc_out))
 
         # Concatenate the outputs from all projectors
         dec_out = torch.cat(dec_outs, dim=2)
