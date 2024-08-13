@@ -209,9 +209,9 @@ class HSOFTS(BaseMultivariate):
         )
 
         #self.projection = nn.Linear(hidden_size, self.h, bias=True)
-        self.projector1 = nn.Linear(self.hidden_size, h // 3, bias=True)
-        self.projector2 = nn.Linear(self.hidden_size, h // 3, bias=True)
-        self.projector3 = nn.Linear(self.hidden_size, h // 3, bias=True)
+        self.projector1 = nn.Linear(hidden_size, self.h // 3, bias=True)
+        self.projector2 = nn.Linear(hidden_size, self.h // 3, bias=True)
+        self.projector3 = nn.Linear(hidden_size, self.h // 3, bias=True)
 
     def forecast(self, x_enc):
         # Normalization from Non-stationary Transformer
@@ -240,7 +240,7 @@ class HSOFTS(BaseMultivariate):
         dec_out3 = self.projector3(segment3).permute(0, 2, 1)
 
         # Concatenate the three outputs
-        dec_out = torch.cat([dec_out1, dec_out2, dec_out3], dim=1)
+        dec_out = torch.cat([dec_out1, dec_out2, dec_out3], dim=2)
 
         #dec_out = self.final(dec_out)
 
