@@ -290,7 +290,7 @@ class HiTransformer(BaseMultivariate):
 
         print("224")
         # Concatenate the three outputs
-        dec_out = torch.cat([dec_out1, dec_out2, dec_out3], dim=2)
+        dec_out = torch.cat([dec_out1, dec_out2, dec_out3], dim=1)
 
         print("225")
         if self.use_norm:
