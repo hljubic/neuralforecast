@@ -211,6 +211,10 @@ class HSOFTS(BaseMultivariate):
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
 
 
+    def rescale(self, data, min_val, max_val):
+        # Reskaliranje na opseg min-max samo za diff_data
+        return min_val + (data - data.min(dim=1, keepdim=True)[0]) * (max_val - min_val) / (data.max(dim=1, keepdim=True)[0] - data.min(dim=1, keepdim=True)[0] + 1e-5)
+
     def ewma(self, data, alpha):
         # Implementacija EWMA
         result = torch.zeros_like(data)
@@ -229,10 +233,15 @@ class HSOFTS(BaseMultivariate):
             )
             x_enc /= stdev
 
-            # Zaglađivanje sa EWMA
+            # Čuvanje min i max vrednosti pre zaglađivanja
+            min_val = x_enc.min(dim=1, keepdim=True)[0]
+            max_val = x_enc.max(dim=1, keepdim=True)[0]
+
             smooth_left = self.ewma(x_enc, alpha=0.04)
             smooth_right = self.ewma(x_enc.flip(1), alpha=0.04).flip(1)
             x_enc = (smooth_left + smooth_right) / 2
+
+            x_enc = self.rescale(x_enc, min_val, max_val)
 
         _, _, N = x_enc.shape
 
