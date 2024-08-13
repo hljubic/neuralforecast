@@ -224,6 +224,7 @@ class HiTransformer(BaseMultivariate):
         self.factor = factor
         self.dropout = dropout
         self.use_norm = use_norm
+        self.projectors_num = 5#projectors_num
 
         # Architecture
         self.enc_embedding = DataEmbedding_inverted(input_size, self.hidden_size, self.dropout)
@@ -248,15 +249,15 @@ class HiTransformer(BaseMultivariate):
             norm_layer=torch.nn.LayerNorm(self.hidden_size),
         )
 
-        # Define three projectors, one for each segment
-        self.projector1 = nn.Linear(self.hidden_size, h // 3, bias=True)
-        self.projector2 = nn.Linear(self.hidden_size, h // 3, bias=True)
-        self.projector3 = nn.Linear(self.hidden_size, h // 3, bias=True)
+        # Define a list of projectors, one for each segment
+        self.projectors = nn.ModuleList([nn.Linear(self.hidden_size, h // projectors_num, bias=True) for _ in range(projectors_num)])
+
+        # Final Linear layer
         self.final = nn.Linear(h, h, bias=True)
 
-        self.projector11 = nn.Linear(h, h // 3, bias=True)
-        self.projector22 = nn.Linear(h, h // 3, bias=True)
-        self.projector33 = nn.Linear(h, h // 3, bias=True)
+        # Define additional projectors after final
+        self.additional_projectors = nn.ModuleList([nn.Linear(h, h // projectors_num, bias=True) for _ in range(projectors_num)])
+
 
     def forecast(self, x_enc):
         if self.use_norm:
@@ -268,35 +269,34 @@ class HiTransformer(BaseMultivariate):
             )
             x_enc /= stdev
 
-        BB, LL, NN = x_enc.shape  # B L N
+        B, L, N = x_enc.shape  # B L N
         enc_out = self.enc_embedding(x_enc, None)
 
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
         # Calculate the segment lengths dynamically
-        segment_len = enc_out.shape[2] // 1
-        # Split the encoded output into three segments based on dynamic indices
-        segment1 = enc_out[:, :, :segment_len]
-        segment2 = segment1#enc_out[:, :, segment_len:2*segment_len]
-        segment3 = segment1#enc_out[:, :, 2*segment_len:]
+        segment_len = enc_out.shape[2] // self.projectors_num
 
-        # Get predictions from each segment using corresponding projectors
-        dec_out1 = self.projector1(segment1)#.permute(0, 2, 1)
-        dec_out2 = self.projector2(segment2)#.permute(0, 2, 1)
-        dec_out3 = self.projector3(segment3)#.permute(0, 2, 1)
+        # Generate predictions from each segment using corresponding projectors
+        dec_outs = []
+        for i, projector in enumerate(self.projectors):
+            start_idx = i * segment_len
+            end_idx = (i + 1) * segment_len
+            segment = enc_out[:, :, start_idx:end_idx]
+            dec_outs.append(projector(segment))
 
-        # Concatenate the three outputs
-        dec_out = torch.cat([dec_out1, dec_out2, dec_out3], dim=2)
+        # Concatenate the outputs from all projectors
+        dec_out = torch.cat(dec_outs, dim=2)
 
-        dec_out = self.final(dec_out)#.permute(0, 2, 1)
+        # Pass through the final linear layer
+        dec_out = self.final(dec_out)
 
-        #dec_out = enc_out[:, :, :segment_len]
+        # Additional projectors after final
+        final_outs = []
+        for projector in self.additional_projectors:
+            final_outs.append(projector(dec_out).permute(0, 2, 1))
 
-        dec_out11 = self.projector11(dec_out).permute(0, 2, 1)
-        dec_out22 = self.projector22(dec_out).permute(0, 2, 1)
-        dec_out33 = self.projector33(dec_out).permute(0, 2, 1)
-
-        dec_out = torch.cat([dec_out11, dec_out22, dec_out33], dim=1)
+        dec_out = torch.cat(final_outs, dim=1)
 
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
