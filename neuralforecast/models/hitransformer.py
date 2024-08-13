@@ -271,8 +271,8 @@ class HiTransformer(BaseMultivariate):
             )
             x_enc /= stdev
             # Zaglađivanje sa EWMA
-            smooth_left = self.ewma(x_enc, alpha=0.2)
-            smooth_right = self.ewma(x_enc.flip(1), alpha=0.2).flip(1)
+            smooth_left = self.ewma(x_enc, alpha=0.04)
+            smooth_right = self.ewma(x_enc.flip(1), alpha=0.04).flip(1)
             x_enc = (smooth_left + smooth_right) / 2
 
         _, _, N = x_enc.shape  # B L N
