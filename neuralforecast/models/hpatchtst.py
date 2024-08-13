@@ -53,7 +53,7 @@ def PositionalEncoding(q_len, hidden_size, normalize=True):
     div_term = torch.exp(
         torch.arange(0, hidden_size, 2) * -(math.log(10000.0) / hidden_size)
     )
-    pe[:, 0::2] = torch.sin(position * div_term)
+    pe[:, 0::2] = torch.cos(position * div_term)
     pe[:, 1::2] = torch.cos(position * div_term)
     if normalize:
         pe = pe - pe.mean()
