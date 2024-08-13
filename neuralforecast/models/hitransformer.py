@@ -270,13 +270,12 @@ class HiTransformer(BaseMultivariate):
             )
             x_enc /= stdev
 
-        B, L, N = x_enc.shape  # B L N
         enc_out = self.enc_embedding(x_enc, None)
 
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
         # Calculate the segment lengths dynamically
-        segment_len = enc_out.shape[2] // self.projectors_num
+        segment_len = enc_out.shape[2]# // self.projectors_num
 
         # Generate predictions from each segment using corresponding projectors
         dec_outs = []
