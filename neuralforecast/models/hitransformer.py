@@ -269,17 +269,19 @@ class HiTransformer(BaseMultivariate):
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
         # Calculate the segment lengths dynamically
-        segment_len = LL // 3
+        segment_len = enc_out.shape[2] // 3
 
         # Split the encoded output into three segments based on dynamic indices
         segment1 = enc_out[:, :, :segment_len]
         segment2 = enc_out[:, :, segment_len:2*segment_len]
         segment3 = enc_out[:, :, 2*segment_len:]
+
         print('-a--a-a-a-a-a---:', segment_len) # 32
         print('-a--a-a-a-a-a--LEN-:', len(enc_out))
         print('-a--a-a-a-a-a---ENC_OUT:', enc_out.shape)
         print('-a--a-a-a-a-aBBLLNN', BB, LL, NN ) #665 96 8
         print('-a--a-a-a-a-aself.hidden', self.hidden_size) # 512
+
         # Get predictions from each segment using corresponding projectors
         dec_out1 = self.projector1(segment1).permute(0, 2, 1)
         dec_out2 = self.projector2(segment2).permute(0, 2, 1)
