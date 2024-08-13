@@ -254,6 +254,10 @@ class HiTransformer(BaseMultivariate):
         self.projector3 = nn.Linear(self.hidden_size, h // 3, bias=True)
         self.final = nn.Linear(h, h, bias=True)
 
+        self.projector11 = nn.Linear(h, h // 3, bias=True)
+        self.projector22 = nn.Linear(h, h // 3, bias=True)
+        self.projector33 = nn.Linear(h, h // 3, bias=True)
+
     def forecast(self, x_enc):
         if self.use_norm:
             # Normalization from Non-stationary Transformer
@@ -285,6 +289,14 @@ class HiTransformer(BaseMultivariate):
         dec_out = torch.cat([dec_out1, dec_out2, dec_out3], dim=2)
 
         dec_out = self.final(dec_out).permute(0, 2, 1)
+
+        #dec_out = enc_out[:, :, :segment_len]
+
+        dec_out11 = self.projector11(dec_out)#.permute(0, 2, 1)
+        dec_out22 = self.projector22(dec_out)#.permute(0, 2, 1)
+        dec_out33 = self.projector33(dec_out)#.permute(0, 2, 1)
+
+        dec_out = torch.cat([dec_out11, dec_out22, dec_out33], dim=2)
 
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
