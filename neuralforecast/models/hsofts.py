@@ -240,7 +240,7 @@ class HSOFTS(BaseMultivariate):
         dec_out3 = self.projector3(segment3).permute(0, 2, 1)
 
         # Concatenate the three outputs
-        dec_out = torch.cat([dec_out1, dec_out2, dec_out3], dim=2)
+        dec_out = torch.cat([dec_out1, dec_out2, dec_out3], dim=1)
 
         #dec_out = self.final(dec_out)
 
