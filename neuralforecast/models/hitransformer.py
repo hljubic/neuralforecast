@@ -275,11 +275,13 @@ class HiTransformer(BaseMultivariate):
         segment1 = enc_out[:, :, :segment_len]
         segment2 = enc_out[:, :, segment_len:2*segment_len]
         segment3 = enc_out[:, :, 2*segment_len:]
-
+        print('-a--a-a-a-a-a---:' + segment_len)
+        print('-a--a-a-a-a-aBBLLNN', BB, LL, NN )
+        print('-a--a-a-a-a-aself.hidden', self.hidden_size)
         # Get predictions from each segment using corresponding projectors
-        dec_out1 = self.projector1(segment1)#.permute(0, 2, 1)
-        dec_out2 = self.projector2(segment2)#.permute(0, 2, 1)
-        dec_out3 = self.projector3(segment3)#.permute(0, 2, 1)
+        dec_out1 = self.projector1(segment1).permute(0, 2, 1)
+        dec_out2 = self.projector2(segment2).permute(0, 2, 1)
+        dec_out3 = self.projector3(segment3).permute(0, 2, 1)
 
         # Concatenate the three outputs
         dec_out = torch.cat([dec_out1, dec_out2, dec_out3], dim=2)
