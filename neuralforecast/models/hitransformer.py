@@ -250,60 +250,48 @@ class HiTransformer(BaseMultivariate):
             norm_layer=torch.nn.LayerNorm(self.hidden_size),
         )
 
-        # Dve linearne mreže
-        self.projector_smooth = nn.Linear(self.hidden_size, self.h, bias=True)
-        self.projector_diff = nn.Linear(self.hidden_size, self.h, bias=True)
+        self.projector = nn.Linear(self.hidden_size, h, bias=True)
 
     def forecast(self, x_enc):
-        self.use_norm = False
         if self.use_norm:
-            # Normalizacija
+            # Normalization from Non-stationary Transformer
             means = x_enc.mean(1, keepdim=True).detach()
             x_enc = x_enc - means
             stdev = torch.sqrt(
                 torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
             )
             x_enc /= stdev
+            # Zaglađivanje sa EWMA
+            smooth_left = self.ewma(x_enc, alpha=0.2)
+            smooth_right = self.ewma(x_enc.flip(1), alpha=0.2).flip(1)
+            x_enc = (smooth_left + smooth_right) / 2
 
         _, _, N = x_enc.shape  # B L N
+        # B: batch_size;       E: hidden_size;
+        # L: input_size;       S: horizon(h);
+        # N: number of variate (tokens), can also includes covariates
 
         # Embedding
+        # B L N -> B N E                (B L N -> B L E in the vanilla Transformer)
         enc_out = self.enc_embedding(
             x_enc, None
-        )
+        )  # covariates (e.g timestamp) can be also embedded as tokens
 
-        # Prolaz kroz encoder
+        # B N E -> B N E                (B L E -> B L E in the vanilla Transformer)
+        # the dimensions of embedded time series has been inverted, and then processed by native attn, layernorm and ffn modules
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
-        # Zaglađivanje sa EWMA
-        smooth_left = self.ewma(enc_out, alpha=0.3)
-        smooth_right = self.ewma(enc_out.flip(1), alpha=0.3).flip(1)
-        smooth_data = (smooth_left + smooth_right) / 2
-
-        # Razlika između originalnih i zaglađenih vrednosti
-        diff_data = enc_out - smooth_data
-
-        # Prolaz kroz dve odvojene mreže
-        dec_out_smooth = self.projector_smooth(smooth_data).permute(0, 2, 1)[:, :, :N]
-        dec_out_diff = self.projector_diff(diff_data).permute(0, 2, 1)[:, :, :N]
-
-        # Kombinacija rezultata
-        dec_out = dec_out_smooth + dec_out_diff
+        # B N E -> B N S -> B S N
+        dec_out = self.projector(enc_out).permute(0, 2, 1)[
+            :, :, :N
+        ]  # filter the covariates
 
         if self.use_norm:
-            # De-normalizacija
+            # De-Normalization from Non-stationary Transformer
             dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
 
         return dec_out
-
-    def ewma(self, data, alpha):
-        # Implementacija EWMA
-        result = torch.zeros_like(data)
-        result[:, 0, :] = data[:, 0, :]
-        for t in range(1, data.size(1)):
-            result[:, t, :] = alpha * data[:, t, :] + (1 - alpha) * result[:, t - 1, :]
-        return result
 
     def forward(self, windows_batch):
         insample_y = windows_batch["insample_y"]
