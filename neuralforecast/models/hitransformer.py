@@ -250,7 +250,6 @@ class HiTransformer(BaseMultivariate):
             norm_layer=torch.nn.LayerNorm(self.hidden_size),
         )
 
-
         # Dve linearne mreže
         self.projector_smooth = nn.Linear(self.hidden_size, self.h, bias=True)
         self.projector_diff = nn.Linear(self.hidden_size, self.h, bias=True)
