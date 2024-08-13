@@ -258,6 +258,7 @@ class HiTransformer(BaseMultivariate):
         self.projectors = nn.ModuleList(
             [nn.Linear(self.hidden_size, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
 
+
     def forecast(self, x_enc):
         if self.use_norm:
             # Normalization from Non-stationary Transformer
@@ -269,6 +270,7 @@ class HiTransformer(BaseMultivariate):
             x_enc /= stdev
 
         enc_out = self.enc_embedding(x_enc, None)
+
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
         # Generate predictions using before_projectors and projectors
@@ -280,14 +282,16 @@ class HiTransformer(BaseMultivariate):
             out3 = self.before_projectors[3 * i + 2](enc_out)
 
             # Pass each through its corresponding projector
-            final_out1 = self.projectors[i](out1)
-            final_out2 = self.projectors[i](out2)
-            final_out3 = self.projectors[i](out3)
+            final_out1 = self.projectors[i](out1).permute(0, 2, 1)
+            final_out2 = self.projectors[i](out2).permute(0, 2, 1)
+            final_out3 = self.projectors[i](out3).permute(0, 2, 1)
 
             # Collect all three final outputs for this projector
             dec_outs.append(final_out1)
             dec_outs.append(final_out2)
             dec_outs.append(final_out3)
+
+
 
         # Concatenate the outputs from all projectors
         dec_out = torch.cat(dec_outs, dim=2)
