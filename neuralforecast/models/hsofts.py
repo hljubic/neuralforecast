@@ -209,7 +209,20 @@ class HSOFTS(BaseMultivariate):
         )
 
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
+        self.projectors_num = 3
 
+        self.projector = nn.Linear(self.hidden_size, h, bias=True)
+
+        # Define a list of projectors, one for each segment
+        self.projectors = nn.ModuleList(
+            [nn.Linear(self.hidden_size, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
+
+        # Final Linear layer
+        self.final = nn.Linear(h, h, bias=True)
+
+        # Define additional projectors after final
+        self.additional_projectors = nn.ModuleList(
+            [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
 
     def ewma(self, data, alpha):
         # Implementacija EWMA
@@ -246,7 +259,24 @@ class HSOFTS(BaseMultivariate):
 
         enc_out = self.enc_embedding(x_enc, None)
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
-        dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
+
+        # Generate predictions from each segment using corresponding projectors
+        dec_outs = []
+        for i, projector in enumerate(self.projectors):
+            dec_outs.append(projector(enc_out))
+
+        # Concatenate the outputs from all projectors
+        dec_out = torch.cat(dec_outs, dim=2)
+
+        # Pass through the final linear layer
+        dec_out = self.final(dec_out)
+
+        # Additional projectors after final
+        final_outs = []
+        for projector in self.additional_projectors:
+            final_outs.append(projector(dec_out).permute(0, 2, 1))
+
+        dec_out = torch.cat(final_outs, dim=1)
 
         # De-Normalization from Non-stationary Transformer
         if self.use_norm:
