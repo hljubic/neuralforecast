@@ -318,3 +318,16 @@ class HiTransformer(BaseMultivariate):
     def rescale(self, data, min_val, max_val):
         # Reskaliranje na opseg min-max samo za diff_data
         return min_val + (data - data.min(dim=1, keepdim=True)[0]) * (max_val - min_val) / (data.max(dim=1, keepdim=True)[0] - data.min(dim=1, keepdim=True)[0] + 1e-5)
+
+    def forward(self, windows_batch):
+        insample_y = windows_batch["insample_y"]
+
+        y_pred = self.forecast(insample_y)
+        y_pred = y_pred[:, -self.h :, :]
+        y_pred = self.loss.domain_map(y_pred)
+
+        # domain_map might have squeezed the last dimension in case n_series == 1
+        if y_pred.ndim == 2:
+            return y_pred.unsqueeze(-1)
+        else:
+            return y_pred
