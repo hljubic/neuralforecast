@@ -207,12 +207,12 @@ class HSOFTS(BaseMultivariate):
                 for l in range(e_layers)
             ]
         )
-        self.hidden_size = hidden_size
-
-        self.encoder = nn.Linear(self.input_size, self.hidden_size)
 
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
         self.projectors_num = 3
+        self.hidden_size = hidden_size
+
+        self.encoder = nn.Linear(self.hidden_size, self.hidden_size)
 
         self.projector = nn.Linear(self.hidden_size, h, bias=True)
 
@@ -261,7 +261,7 @@ class HSOFTS(BaseMultivariate):
         _, _, N = x_enc.shape
 
         enc_out = self.enc_embedding(x_enc, None)
-        enc_out, attns = self.encoder(enc_out).permute(0, 2, 1)
+        enc_out, attns = self.encoder(enc_out)
 
         # Generate predictions from each segment using corresponding projectors
         dec_outs = []

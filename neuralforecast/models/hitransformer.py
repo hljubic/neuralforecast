@@ -249,7 +249,7 @@ class HiTransformer(BaseMultivariate):
             ],
             norm_layer=torch.nn.LayerNorm(self.hidden_size),
         )
-        self.encoder = nn.Linear(self.input_size, self.hidden_size)
+        self.encoder = nn.Linear(self.hidden_size, self.hidden_size)
 
         self.projectors_num = 3
 
@@ -308,7 +308,7 @@ class HiTransformer(BaseMultivariate):
 
         # B N E -> B N E                (B L E -> B L E in the vanilla Transformer)
         # the dimensions of embedded time series has been inverted, and then processed by native attn, layernorm and ffn modules
-        enc_out, attns = self.encoder(enc_out).permute(0, 2, 1)
+        enc_out, attns = self.encoder(enc_out)
 
 
         # Generate predictions from each segment using corresponding projectors
