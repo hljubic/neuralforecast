@@ -211,7 +211,7 @@ class HSOFTS(BaseMultivariate):
         )
 
         # Define a list of projectors, one for each segment
-        self.projectors = nn.ModuleList([nn.Linear(self.hidden_size, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
+        self.projectors = nn.ModuleList([nn.Linear(hidden_size, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
 
         # Final Linear layer
         self.final = nn.Linear(h, h, bias=True)
