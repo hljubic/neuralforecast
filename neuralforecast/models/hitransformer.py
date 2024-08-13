@@ -265,17 +265,24 @@ class HiTransformer(BaseMultivariate):
             # Differencing (diff(1)) - Zapamti početnu vrednost
             initial_values = x_enc[:, 0, :].unsqueeze(1).detach()
             x_enc = x_enc.diff(dim=1)
-            x_enc = torch.cat([initial_values, x_enc], dim=1)  # Dodaj 0 ili početnu vrednost nazad na početak
+            x_enc = torch.cat([initial_values, x_enc], dim=1)  # Dodaj početnu vrednost nazad na početak
 
-            # Apply bidirectional EWMA
+            # Apply bidirectional EWMA with copies
             alpha = 0.2
             min_val, max_val = x_enc.min(), x_enc.max()
+
             # Forward EWMA
-            for t in range(1, x_enc.size(1)):
-                x_enc[:, t, :] = alpha * x_enc[:, t, :] + (1 - alpha) * x_enc[:, t - 1, :]
+            forward_ewma = x_enc.clone()
+            for t in range(1, forward_ewma.size(1)):
+                forward_ewma[:, t, :] = alpha * forward_ewma[:, t, :] + (1 - alpha) * forward_ewma[:, t - 1, :]
+
             # Backward EWMA
-            for t in range(x_enc.size(1) - 2, -1, -1):
-                x_enc[:, t, :] = alpha * x_enc[:, t, :] + (1 - alpha) * x_enc[:, t + 1, :]
+            backward_ewma = x_enc.clone()
+            for t in range(backward_ewma.size(1) - 2, -1, -1):
+                backward_ewma[:, t, :] = alpha * backward_ewma[:, t, :] + (1 - alpha) * backward_ewma[:, t + 1, :]
+
+            # Combine forward and backward EWMA
+            x_enc = (forward_ewma + backward_ewma) / 2.0
 
             # Re-scale between min and max
             x_enc = (x_enc - x_enc.min()) / (x_enc.max() - x_enc.min()) * (max_val - min_val) + min_val
@@ -295,6 +302,9 @@ class HiTransformer(BaseMultivariate):
             for t in range(1, dec_out.size(1)):
                 dec_out[:, t, :] += dec_out[:, t - 1, :]
 
+            # Vraćanje početne vrednosti nakon integracije
+            dec_out[:, 0, :] = initial_values.squeeze(1)
+
             # De-Normalization from Non-stationary Transformer
             dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
@@ -312,7 +322,6 @@ class HiTransformer(BaseMultivariate):
             return y_pred.unsqueeze(-1)
         else:
             return y_pred
-
 
     def forecast_org(self, x_enc):
         if self.use_norm:
