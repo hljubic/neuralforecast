@@ -183,6 +183,7 @@ class HiTransformer(BaseMultivariate):
         optimizer_kwargs=None,
         lr_scheduler=None,
         lr_scheduler_kwargs=None,
+        projectors_num=1,
         **trainer_kwargs
     ):
 
@@ -224,7 +225,7 @@ class HiTransformer(BaseMultivariate):
         self.factor = factor
         self.dropout = dropout
         self.use_norm = use_norm
-        self.projectors_num = 5#projectors_num
+        self.projectors_num = projectors_num
 
         # Architecture
         self.enc_embedding = DataEmbedding_inverted(input_size, self.hidden_size, self.dropout)
