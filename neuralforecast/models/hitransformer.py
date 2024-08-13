@@ -277,14 +277,14 @@ class HiTransformer(BaseMultivariate):
         segment3 = segment1#enc_out[:, :, 2*segment_len:]
 
         # Get predictions from each segment using corresponding projectors
-        dec_out1 = self.projector1(segment1).permute(0, 2, 1)
-        dec_out2 = self.projector2(segment2).permute(0, 2, 1)
-        dec_out3 = self.projector3(segment3).permute(0, 2, 1)
+        dec_out1 = self.projector1(segment1)#.permute(0, 2, 1)
+        dec_out2 = self.projector2(segment2)#.permute(0, 2, 1)
+        dec_out3 = self.projector3(segment3)#.permute(0, 2, 1)
 
         # Concatenate the three outputs
         dec_out = torch.cat([dec_out1, dec_out2, dec_out3], dim=1)
 
-        dec_out = self.final(dec_out)
+        dec_out = self.final(dec_out).permute(0, 2, 1)
 
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
