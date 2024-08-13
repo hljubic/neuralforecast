@@ -51,13 +51,13 @@ def PositionalEncoding(q_len, hidden_size, normalize=True):
     pe = torch.zeros(q_len, hidden_size)
     position = torch.arange(0, q_len).unsqueeze(1)
     div_term = torch.exp(
-        torch.arange(0, hidden_size, 2) * -(math.log(10000.0) / hidden_size)
+        torch.arange(0, hidden_size, 2) * -(math.log(100.0) / hidden_size)
     )
-    pe[:, 0::2] = torch.cos(position * div_term)
-    pe[:, 1::2] = torch.cos(position * div_term)
+    pe[:, 0::2] = torch.sin(position * div_term)
+    pe[:, 1::2] = torch.sin(position * div_term)
     if normalize:
         pe = pe - pe.mean()
-        pe = pe / (pe.std() * 10)
+        pe = pe / (pe.std() * 100)
     return pe
 
 
@@ -401,8 +401,8 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
         d_v=None,
         linear_hidden_size=256,
         norm="BatchNorm",
-        attn_dropout=0.0,
-        dropout=0.0,
+        attn_dropout=0.9,
+        dropout=0.9,
         act="gelu",
         store_attn=False,
         key_padding_mask="auto",
