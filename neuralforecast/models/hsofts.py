@@ -207,11 +207,12 @@ class HSOFTS(BaseMultivariate):
                 for l in range(e_layers)
             ]
         )
+        self.hidden_size = hidden_size
+
         self.encoder = nn.Linear(self.input_size, self.hidden_size)
 
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
         self.projectors_num = 3
-        self.hidden_size = hidden_size
 
         self.projector = nn.Linear(self.hidden_size, h, bias=True)
 
