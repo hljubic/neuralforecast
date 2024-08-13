@@ -216,10 +216,10 @@ class HSOFTS(BaseMultivariate):
 
         # Define a list of projectors, one for each segment
         self.projectors = nn.ModuleList(
-            [nn.Linear(self.hidden_size, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
+            [nn.Linear(self.hidden_size, h, bias=True) for _ in range(self.projectors_num)])
 
         # Final Linear layer
-        self.final = nn.Linear(h, h, bias=True)
+        self.final = nn.Linear(h * self.projectors_num, h, bias=True)
 
         # Define additional projectors after final
         self.additional_projectors = nn.ModuleList(
