@@ -250,10 +250,15 @@ class HiTransformer(BaseMultivariate):
             norm_layer=torch.nn.LayerNorm(self.hidden_size),
         )
 
+
         # Dve linearne mreže
         self.projector_smooth = nn.Linear(self.hidden_size, self.h, bias=True)
         self.projector_diff = nn.Linear(self.hidden_size, self.h, bias=True)
+        # Define before_projectors: 3 * projectors_num for each segment
+        self.before_projectors = nn.ModuleList([nn.Linear(self.hidden_size, self.hidden_size, bias=True) for _ in range(3 * self.projectors_num)])
 
+        # Define projectors, one for each set of before_projectors
+        self.projectors = nn.ModuleList([nn.Linear(self.hidden_size, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
 
     def forecast(self, x_enc):
         if self.use_norm:
@@ -275,23 +280,13 @@ class HiTransformer(BaseMultivariate):
         # Prolaz kroz encoder
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
-        # Čuvanje min i max vrednosti pre zaglađivanja
-        min_val = enc_out.min(dim=1, keepdim=True)[0]
-        max_val = enc_out.max(dim=1, keepdim=True)[0]
-
         # Zaglađivanje sa EWMA
-        smooth_left = self.ewma(enc_out, alpha=0.1)
-        smooth_right = self.ewma(enc_out.flip(1), alpha=0.1).flip(1)
+        smooth_left = self.ewma(enc_out, alpha=0.3)
+        smooth_right = self.ewma(enc_out.flip(1), alpha=0.3).flip(1)
         smooth_data = (smooth_left + smooth_right) / 2
 
         # Razlika između originalnih i zaglađenih vrednosti
         diff_data = enc_out - smooth_data
-
-        # Zaglađivanje diferencijalnih podataka sa EWMA
-        diff_data = self.ewma(diff_data, alpha=0.1)
-
-        # Reskaliranje diferencijalnih podataka na opseg min-max
-        diff_data = self.rescale(diff_data, min_val, max_val)
 
         # Prolaz kroz dve odvojene mreže
         dec_out_smooth = self.projector_smooth(smooth_data).permute(0, 2, 1)[:, :, :N]
@@ -314,10 +309,6 @@ class HiTransformer(BaseMultivariate):
         for t in range(1, data.size(1)):
             result[:, t, :] = alpha * data[:, t, :] + (1 - alpha) * result[:, t - 1, :]
         return result
-
-    def rescale(self, data, min_val, max_val):
-        # Reskaliranje na opseg min-max samo za diff_data
-        return min_val + (data - data.min(dim=1, keepdim=True)[0]) * (max_val - min_val) / (data.max(dim=1, keepdim=True)[0] - data.min(dim=1, keepdim=True)[0] + 1e-5)
 
     def forward(self, windows_batch):
         insample_y = windows_batch["insample_y"]

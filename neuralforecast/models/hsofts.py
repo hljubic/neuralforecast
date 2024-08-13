@@ -236,8 +236,8 @@ class HSOFTS(BaseMultivariate):
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
         # Zaglađivanje sa EWMA
-        smooth_left = self.ewma(enc_out, alpha=0.1)
-        smooth_right = self.ewma(enc_out.flip(1), alpha=0.1).flip(1)
+        smooth_left = self.ewma(enc_out, alpha=0.3)
+        smooth_right = self.ewma(enc_out.flip(1), alpha=0.3).flip(1)
         smooth_data = (smooth_left + smooth_right) / 2
 
         # Razlika između originalnih i zaglađenih vrednosti
