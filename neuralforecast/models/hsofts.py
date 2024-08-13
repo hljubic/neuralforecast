@@ -78,6 +78,83 @@ class STAD(nn.Module):
 
         return output, None
 
+# %% ../../nbs/models.hsofts.ipynb 8
+class AdaptiveSTAD(nn.Module):
+    """
+    STar Aggregate Dispatch Module
+    """
+
+    def __init__(self, d_series, d_core):
+        super(AdaptiveSTAD, self).__init__()
+
+        self.temporal_embedding = TemporalEmbedding(d_series, max_len)
+        self.gen1 = nn.Linear(d_series, d_series)
+        self.gen2 = nn.Linear(d_series, d_core)
+
+        # Adaptive Core Formation
+        self.adaptive_core = nn.Linear(d_series, d_core)
+
+        self.gen3 = nn.Linear(d_series + d_core, d_series)
+        self.gen4 = nn.Linear(d_series, d_series)
+
+        # Dropout layers
+        self.dropout1 = nn.Dropout(dropout_rate)
+        self.dropout2 = nn.Dropout(dropout_rate)
+        self.dropout3 = nn.Dropout(dropout_rate)
+
+    def forward(self, input, *args, **kwargs):
+        batch_size, channels, d_series = input.shape
+
+        # Apply temporal embedding
+        input = self.temporal_embedding(input)
+
+        # Set FFN
+        combined_mean = F.gelu(self.gen1(input))
+        combined_mean = self.dropout1(combined_mean)  # Apply dropout
+        combined_mean = self.gen2(combined_mean)
+
+        # Adaptive Core Formation
+        adaptive_core = self.adaptive_core(input.mean(dim=1, keepdim=True))
+        combined_mean = combined_mean + adaptive_core
+
+        # Stochastic pooling
+        if self.training:
+            ratio = F.softmax(combined_mean, dim=1)
+            ratio = ratio.permute(0, 2, 1)
+            ratio = ratio.reshape(-1, channels)
+            indices = torch.multinomial(ratio, 1)
+            indices = indices.view(batch_size, -1, 1).permute(0, 2, 1)
+            combined_mean = torch.gather(combined_mean, 1, indices)
+            combined_mean = combined_mean.repeat(1, channels, 1)
+        else:
+            weight = F.softmax(combined_mean, dim=1)
+            combined_mean = torch.sum(combined_mean * weight, dim=1, keepdim=True).repeat(1, channels, 1)
+
+        combined_mean = self.dropout2(combined_mean)  # Apply dropout
+
+        # MLP fusion
+        combined_mean_cat = torch.cat([input, combined_mean], -1)
+        combined_mean_cat = F.gelu(self.gen3(combined_mean_cat))
+        combined_mean_cat = self.dropout3(combined_mean_cat)  # Apply dropout
+        combined_mean_cat = self.gen4(combined_mean_cat)
+        output = combined_mean_cat
+
+        return output, None
+
+
+class TemporalEmbedding(nn.Module):
+    def __init__(self, d_series, max_len=5000):
+        super(TemporalEmbedding, self).__init__()
+        self.position_embedding = nn.Parameter(torch.zeros(1, max_len, d_series), requires_grad=False)
+        position = torch.arange(0, max_len).unsqueeze(1).float()
+        div_term = torch.exp(torch.arange(0, d_series, 2).float() * -(torch.log(torch.tensor(10000.0)) / d_series))
+        self.position_embedding[:, :, 0::2] = torch.sin(position * div_term)
+        self.position_embedding[:, :, 1::2] = torch.cos(position * div_term)
+
+    def forward(self, x):
+        x = x + self.position_embedding[:, :x.size(1)]
+        return x
+
 # %% ../../nbs/models.hsofts.ipynb 10
 class HSOFTS(BaseMultivariate):
     """HSOFTS
@@ -200,7 +277,7 @@ class HSOFTS(BaseMultivariate):
         self.encoder = TransEncoder(
             [
                 TransEncoderLayer(
-                    STAD(hidden_size, d_core),
+                    AdaptiveSTAD(hidden_size, d_core),
                     hidden_size,
                     d_ff,
                     dropout=dropout,
