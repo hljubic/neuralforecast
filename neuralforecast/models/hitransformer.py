@@ -250,15 +250,9 @@ class HiTransformer(BaseMultivariate):
             norm_layer=torch.nn.LayerNorm(self.hidden_size),
         )
 
-
         # Dve linearne mreže
         self.projector_smooth = nn.Linear(self.hidden_size, self.h, bias=True)
         self.projector_diff = nn.Linear(self.hidden_size, self.h, bias=True)
-        # Define before_projectors: 3 * projectors_num for each segment
-        self.before_projectors = nn.ModuleList([nn.Linear(self.hidden_size, self.hidden_size, bias=True) for _ in range(3 * self.projectors_num)])
-
-        # Define projectors, one for each set of before_projectors
-        self.projectors = nn.ModuleList([nn.Linear(self.hidden_size, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
 
     def forecast(self, x_enc):
         if self.use_norm:
