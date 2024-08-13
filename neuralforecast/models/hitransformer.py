@@ -252,6 +252,7 @@ class HiTransformer(BaseMultivariate):
         self.projector1 = nn.Linear(self.hidden_size, h // 3, bias=True)
         self.projector2 = nn.Linear(self.hidden_size, h // 3, bias=True)
         self.projector3 = nn.Linear(self.hidden_size, h // 3, bias=True)
+        self.final = nn.Linear(h, h, bias=True)
 
     def forecast(self, x_enc):
         if self.use_norm:
@@ -275,30 +276,21 @@ class HiTransformer(BaseMultivariate):
         segment2 = segment1#enc_out[:, :, segment_len:2*segment_len]
         segment3 = segment1#enc_out[:, :, 2*segment_len:]
 
-        print('-a--a-a-a-a-a---:', segment_len) # 32
-        print('-a--a-a-a-a-a--LEN-:', len(enc_out))
-        print('-a--a-a-a-a-a---ENC_OUT:', enc_out.shape)
-        print('-a--a-a-a-a-aBBLLNN', BB, LL, NN ) #665 96 8
-        print('-a--a-a-a-a-aself.hidden', self.hidden_size) # 512
-
         # Get predictions from each segment using corresponding projectors
         dec_out1 = self.projector1(segment1).permute(0, 2, 1)
-        print("22")
         dec_out2 = self.projector2(segment2).permute(0, 2, 1)
-        print("223")
         dec_out3 = self.projector3(segment3).permute(0, 2, 1)
 
-        print("224")
         # Concatenate the three outputs
         dec_out = torch.cat([dec_out1, dec_out2, dec_out3], dim=1)
 
-        print("225")
+        dec_out = self.final(dec_out)
+
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
             dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
 
-        print("226")
         return dec_out
 
     def forward(self, windows_batch):
