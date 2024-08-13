@@ -332,11 +332,11 @@ class HPatchTST_backbone(nn.Module):
             z = self.revin_layer(z, "norm")
             z = z.permute(0, 2, 1)
 
-            smooth_left_copy = self.multi_ewma(z, base_alpha=0.1, iterations=5)
-            smooth_right_copy = self.multi_ewma(z.flip(1), base_alpha=0.1, iterations=5).flip(1)
+        smooth_left_copy = self.multi_ewma(z, base_alpha=0.1, iterations=5)
+        smooth_right_copy = self.multi_ewma(z.flip(1), base_alpha=0.1, iterations=5).flip(1)
 
-            # Izračunaj x_enc nakon multi_ewma
-            z = (smooth_left_copy + smooth_right_copy) / 2
+        # Izračunaj x_enc nakon multi_ewma
+        z = (smooth_left_copy + smooth_right_copy) / 2
 
         # do patching
         if self.padding_patch == "end":
