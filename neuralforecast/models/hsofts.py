@@ -97,6 +97,7 @@ class AdaptiveSTAD(nn.Module):
         self.gen3 = nn.Linear(d_series + d_core, d_series)
         self.gen4 = nn.Linear(d_series, d_series)
 
+        dropout_rate = 0.1
         # Dropout layers
         self.dropout1 = nn.Dropout(dropout_rate)
         self.dropout2 = nn.Dropout(dropout_rate)
