@@ -210,40 +210,6 @@ class HSOFTS(BaseMultivariate):
 
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
 
-    def forecast_org(self, x_enc):
-        # Normalization from Non-stationary Transformer
-        if self.use_norm:
-            means = x_enc.mean(1, keepdim=True).detach()
-            x_enc = x_enc - means
-            stdev = torch.sqrt(
-                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            x_enc /= stdev
-
-        _, _, N = x_enc.shape
-        enc_out = self.enc_embedding(x_enc, None)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
-        dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
-
-        # De-Normalization from Non-stationary Transformer
-        if self.use_norm:
-            dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-            dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-        return dec_out
-
-    def forward_org(self, windows_batch):
-        insample_y = windows_batch["insample_y"]
-
-        y_pred = self.forecast(insample_y)
-        y_pred = y_pred[:, -self.h :, :]
-        y_pred = self.loss.domain_map(y_pred)
-
-        # domain_map might have squeezed the last dimension in case n_series == 1
-        if y_pred.ndim == 2:
-            return y_pred.unsqueeze(-1)
-        else:
-            return y_pred
-
     def forecast(self, x_enc):
         # Normalization from Non-stationary Transformer
         if self.use_norm:
@@ -254,31 +220,6 @@ class HSOFTS(BaseMultivariate):
             )
             x_enc /= stdev
 
-            # Differencing (diff(1)) - Zapamti početnu vrednost
-            initial_values = x_enc[:, 0, :].unsqueeze(1).detach()
-            x_enc = x_enc.diff(dim=1)
-            x_enc = torch.cat([initial_values, x_enc], dim=1)  # Dodaj početnu vrednost nazad na početak
-
-            # Apply bidirectional EWMA with copies
-            alpha = 0.2
-            min_val, max_val = x_enc.min(), x_enc.max()
-
-            # Forward EWMA
-            forward_ewma = x_enc.clone()
-            for t in range(1, forward_ewma.size(1)):
-                forward_ewma[:, t, :] = alpha * forward_ewma[:, t, :] + (1 - alpha) * forward_ewma[:, t - 1, :]
-
-            # Backward EWMA
-            backward_ewma = x_enc.clone()
-            for t in range(backward_ewma.size(1) - 2, -1, -1):
-                backward_ewma[:, t, :] = alpha * backward_ewma[:, t, :] + (1 - alpha) * backward_ewma[:, t + 1, :]
-
-            # Combine forward and backward EWMA
-            x_enc = (forward_ewma + backward_ewma) / 2.0
-
-            # Re-scale between min and max
-            x_enc = (x_enc - x_enc.min()) / (x_enc.max() - x_enc.min()) * (max_val - min_val) + min_val
-
         _, _, N = x_enc.shape
         enc_out = self.enc_embedding(x_enc, None)
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
@@ -286,23 +227,15 @@ class HSOFTS(BaseMultivariate):
 
         # De-Normalization from Non-stationary Transformer
         if self.use_norm:
-            # Reverse differencing (integration)
-            for t in range(1, dec_out.size(1)):
-                dec_out[:, t, :] += dec_out[:, t - 1, :]
-
-            # Vraćanje početne vrednosti nakon integracije
-            dec_out[:, 0, :] = initial_values.squeeze(1)
-
             dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-
         return dec_out
 
     def forward(self, windows_batch):
         insample_y = windows_batch["insample_y"]
 
         y_pred = self.forecast(insample_y)
-        y_pred = y_pred[:, -self.h:, :]
+        y_pred = y_pred[:, -self.h :, :]
         y_pred = self.loss.domain_map(y_pred)
 
         # domain_map might have squeezed the last dimension in case n_series == 1

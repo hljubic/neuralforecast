@@ -226,9 +226,7 @@ class HiTransformer(BaseMultivariate):
         self.use_norm = use_norm
 
         # Architecture
-        self.enc_embedding = DataEmbedding_inverted(
-            input_size, self.hidden_size, self.dropout
-        )
+        self.enc_embedding = DataEmbedding_inverted(input_size, self.hidden_size, self.dropout)
 
         self.encoder = TransEncoder(
             [
@@ -250,7 +248,10 @@ class HiTransformer(BaseMultivariate):
             norm_layer=torch.nn.LayerNorm(self.hidden_size),
         )
 
-        self.projector = nn.Linear(self.hidden_size, h, bias=True)
+        # Define three projectors, one for each segment
+        self.projector1 = nn.Linear(self.hidden_size, h // 3, bias=True)
+        self.projector2 = nn.Linear(self.hidden_size, h // 3, bias=True)
+        self.projector3 = nn.Linear(self.hidden_size, h // 3, bias=True)
 
     def forecast(self, x_enc):
         if self.use_norm:
@@ -262,49 +263,28 @@ class HiTransformer(BaseMultivariate):
             )
             x_enc /= stdev
 
-            # Differencing (diff(1)) - Zapamti početnu vrednost
-            initial_values = x_enc[:, 0, :].unsqueeze(1).detach()
-            x_enc = x_enc.diff(dim=1)
-            x_enc = torch.cat([initial_values, x_enc], dim=1)  # Dodaj početnu vrednost nazad na početak
-
-            # Apply bidirectional EWMA with copies
-            alpha = 0.2
-            min_val, max_val = x_enc.min(), x_enc.max()
-
-            # Forward EWMA
-            forward_ewma = x_enc.clone()
-            for t in range(1, forward_ewma.size(1)):
-                forward_ewma[:, t, :] = alpha * forward_ewma[:, t, :] + (1 - alpha) * forward_ewma[:, t - 1, :]
-
-            # Backward EWMA
-            backward_ewma = x_enc.clone()
-            for t in range(backward_ewma.size(1) - 2, -1, -1):
-                backward_ewma[:, t, :] = alpha * backward_ewma[:, t, :] + (1 - alpha) * backward_ewma[:, t + 1, :]
-
-            # Combine forward and backward EWMA
-            x_enc = (forward_ewma + backward_ewma) / 2.0
-
-            # Re-scale between min and max
-            x_enc = (x_enc - x_enc.min()) / (x_enc.max() - x_enc.min()) * (max_val - min_val) + min_val
-
         _, _, N = x_enc.shape  # B L N
-
-        # Embedding
         enc_out = self.enc_embedding(x_enc, None)
 
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
-        # Projection
-        dec_out = self.projector(enc_out).permute(0, 2, 1)[:, :, :N]
+        # Calculate the segment lengths dynamically
+        segment_len = N // 3
+
+        # Split the encoded output into three segments based on dynamic indices
+        segment1 = enc_out[:, :, :segment_len]
+        segment2 = enc_out[:, :, segment_len:2*segment_len]
+        segment3 = enc_out[:, :, 2*segment_len:]
+
+        # Get predictions from each segment using corresponding projectors
+        dec_out1 = self.projector1(segment1).permute(0, 2, 1)
+        dec_out2 = self.projector2(segment2).permute(0, 2, 1)
+        dec_out3 = self.projector3(segment3).permute(0, 2, 1)
+
+        # Concatenate the three outputs
+        dec_out = torch.cat([dec_out1, dec_out2, dec_out3], dim=2)
 
         if self.use_norm:
-            # Reverse differencing (integration)
-            for t in range(1, dec_out.size(1)):
-                dec_out[:, t, :] += dec_out[:, t - 1, :]
-
-            # Vraćanje početne vrednosti nakon integracije
-            dec_out[:, 0, :] = initial_values.squeeze(1)
-
             # De-Normalization from Non-stationary Transformer
             dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
@@ -312,55 +292,6 @@ class HiTransformer(BaseMultivariate):
         return dec_out
 
     def forward(self, windows_batch):
-        insample_y = windows_batch["insample_y"]
-
-        y_pred = self.forecast(insample_y)
-        y_pred = y_pred[:, -self.h:, :]
-        y_pred = self.loss.domain_map(y_pred)
-
-        if y_pred.ndim == 2:
-            return y_pred.unsqueeze(-1)
-        else:
-            return y_pred
-
-    def forecast_org(self, x_enc):
-        if self.use_norm:
-            # Normalization from Non-stationary Transformer
-            means = x_enc.mean(1, keepdim=True).detach()
-            x_enc = x_enc - means
-            stdev = torch.sqrt(
-                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            x_enc /= stdev
-
-        _, _, N = x_enc.shape  # B L N
-        # B: batch_size;       E: hidden_size;
-        # L: input_size;       S: horizon(h);
-        # N: number of variate (tokens), can also includes covariates
-
-        # Embedding
-        # B L N -> B N E                (B L N -> B L E in the vanilla Transformer)
-        enc_out = self.enc_embedding(
-            x_enc, None
-        )  # covariates (e.g timestamp) can be also embedded as tokens
-
-        # B N E -> B N E                (B L E -> B L E in the vanilla Transformer)
-        # the dimensions of embedded time series has been inverted, and then processed by native attn, layernorm and ffn modules
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
-
-        # B N E -> B N S -> B S N
-        dec_out = self.projector(enc_out).permute(0, 2, 1)[
-            :, :, :N
-        ]  # filter the covariates
-
-        if self.use_norm:
-            # De-Normalization from Non-stationary Transformer
-            dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-            dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-
-        return dec_out
-
-    def forward_org(self, windows_batch):
         insample_y = windows_batch["insample_y"]
 
         y_pred = self.forecast(insample_y)
