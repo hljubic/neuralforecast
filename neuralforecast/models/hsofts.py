@@ -236,8 +236,8 @@ class HSOFTS(BaseMultivariate):
             )
             x_enc /= stdev
 
-            smooth_left_copy = self.multi_ewma(x_enc, base_alpha=0.4, iterations=5)
-            smooth_right_copy = self.multi_ewma(x_enc.flip(1), base_alpha=0.4, iterations=5).flip(1)
+            smooth_left_copy = self.multi_ewma(x_enc, base_alpha=0.1, iterations=5)
+            smooth_right_copy = self.multi_ewma(x_enc.flip(1), base_alpha=0.1, iterations=5).flip(1)
 
             # Izračunaj x_enc nakon multi_ewma
             x_enc = (smooth_left_copy + smooth_right_copy) / 2
