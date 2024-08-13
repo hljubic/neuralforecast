@@ -272,8 +272,8 @@ class HiTransformer(BaseMultivariate):
         segment_len = 512#enc_out.shape[2] // 1
         # Split the encoded output into three segments based on dynamic indices
         segment1 = enc_out[:, :, :segment_len]
-        segment2 = enc_out[:, :, segment_len:2*segment_len]
-        segment3 = enc_out[:, :, 2*segment_len:]
+        segment2 = segment1#enc_out[:, :, segment_len:2*segment_len]
+        segment3 = segment1#enc_out[:, :, 2*segment_len:]
 
         print('-a--a-a-a-a-a---:', segment_len) # 32
         print('-a--a-a-a-a-a--LEN-:', len(enc_out))
