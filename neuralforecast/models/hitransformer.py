@@ -250,13 +250,13 @@ class HiTransformer(BaseMultivariate):
         )
 
         # Define a list of projectors, one for each segment
-        self.projectors = nn.ModuleList([nn.Linear(self.hidden_size, h // self.projectors_num, bias=True) for _ in range(projectors_num)])
+        self.projectors = nn.ModuleList([nn.Linear(self.hidden_size, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
 
         # Final Linear layer
         self.final = nn.Linear(h, h, bias=True)
 
         # Define additional projectors after final
-        self.additional_projectors = nn.ModuleList([nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(projectors_num)])
+        self.additional_projectors = nn.ModuleList([nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
 
 
     def forecast(self, x_enc):
