@@ -269,7 +269,7 @@ class HiTransformer(BaseMultivariate):
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
         # Calculate the segment lengths dynamically
-        segment_len = 512#enc_out.shape[2] // 1
+        segment_len = enc_out.shape[2] // 1
         # Split the encoded output into three segments based on dynamic indices
         segment1 = enc_out[:, :, :segment_len]
         segment2 = segment1#enc_out[:, :, segment_len:2*segment_len]
