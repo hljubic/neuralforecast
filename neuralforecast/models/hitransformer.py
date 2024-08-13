@@ -252,6 +252,15 @@ class HiTransformer(BaseMultivariate):
 
         self.projector = nn.Linear(self.hidden_size, h, bias=True)
 
+
+    def ewma(self, data, alpha):
+        # Implementacija EWMA
+        result = torch.zeros_like(data)
+        result[:, 0, :] = data[:, 0, :]
+        for t in range(1, data.size(1)):
+            result[:, t, :] = alpha * data[:, t, :] + (1 - alpha) * result[:, t - 1, :]
+        return result
+
     def forecast(self, x_enc):
         if self.use_norm:
             # Normalization from Non-stationary Transformer
