@@ -292,11 +292,11 @@ class HiTransformer(BaseMultivariate):
 
         #dec_out = enc_out[:, :, :segment_len]
 
-        dec_out11 = self.projector11(dec_out)#.permute(0, 2, 1)
-        dec_out22 = self.projector22(dec_out)#.permute(0, 2, 1)
-        dec_out33 = self.projector33(dec_out)#.permute(0, 2, 1)
+        dec_out11 = self.projector11(dec_out).permute(0, 2, 1)
+        dec_out22 = self.projector22(dec_out).permute(0, 2, 1)
+        dec_out33 = self.projector33(dec_out).permute(0, 2, 1)
 
-        dec_out = torch.cat([dec_out11, dec_out22, dec_out33], dim=2)
+        dec_out = torch.cat([dec_out11, dec_out22, dec_out33], dim=1)
 
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
