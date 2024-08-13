@@ -274,16 +274,15 @@ class HiTransformer(BaseMultivariate):
 
         # Apply EWMA with alpha=0.2
         alpha = 0.2
-        left_to_right_ewma = (
-            torch.cumsum(
-                x_enc_diff * (alpha * (1 - alpha) ** torch.arange(x_enc_diff.size(1)).flip(0).to(x_enc_diff.device)),
-                dim=1)
-        )
-        right_to_left_ewma = (
-            torch.cumsum(x_enc_diff.flip(1) * (
-                        alpha * (1 - alpha) ** torch.arange(x_enc_diff.size(1)).flip(0).to(x_enc_diff.device)),
-                         dim=1).flip(1)
-        )
+        sequence_length = x_enc_diff.size(1)
+        weights = (alpha * (1 - alpha) ** torch.arange(sequence_length).flip(0).to(x_enc_diff.device))
+
+        # Adjust weights size by adding a 0 at the start to match sequence length
+        weights = torch.cat([torch.zeros(1, device=x_enc_diff.device), weights], dim=0)[1:]
+
+        left_to_right_ewma = torch.cumsum(x_enc_diff * weights, dim=1)
+        right_to_left_ewma = torch.cumsum(x_enc_diff.flip(1) * weights.flip(0), dim=1).flip(1)
+
         x_enc_smoothed = (left_to_right_ewma + right_to_left_ewma) / 2
 
         # Re-scale to original min and max
