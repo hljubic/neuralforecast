@@ -195,6 +195,8 @@ class HSOFTS(BaseMultivariate):
         # Architecture
         self.enc_embedding = DataEmbedding_inverted(input_size, hidden_size, dropout)
 
+        self.hidden_size = hidden_size
+
         # Zamena TransEncoder sa nn.Linear
         self.encoder = nn.Linear(self.hidden_size, self.hidden_size)
 
