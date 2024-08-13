@@ -255,6 +255,7 @@ class HiTransformer(BaseMultivariate):
         self.projector_diff = nn.Linear(self.hidden_size, self.h, bias=True)
 
     def forecast(self, x_enc):
+        self.use_norm = False
         if self.use_norm:
             # Normalizacija
             means = x_enc.mean(1, keepdim=True).detach()
