@@ -183,6 +183,7 @@ class HiTransformer(BaseMultivariate):
         optimizer_kwargs=None,
         lr_scheduler=None,
         lr_scheduler_kwargs=None,
+        projectors_num=1,
         **trainer_kwargs
     ):
 
@@ -224,11 +225,10 @@ class HiTransformer(BaseMultivariate):
         self.factor = factor
         self.dropout = dropout
         self.use_norm = use_norm
+        self.projectors_num = projectors_num
 
         # Architecture
-        self.enc_embedding = DataEmbedding_inverted(
-            input_size, self.hidden_size, self.dropout
-        )
+        self.enc_embedding = DataEmbedding_inverted(input_size, self.hidden_size, self.dropout)
 
         self.encoder = TransEncoder(
             [
@@ -250,14 +250,15 @@ class HiTransformer(BaseMultivariate):
             norm_layer=torch.nn.LayerNorm(self.hidden_size),
         )
 
+        # Define before_projectors: 3 * projectors_num for each segment
+        self.before_projectors = nn.ModuleList([nn.Linear(self.hidden_size, self.hidden_size, bias=True) for _ in range(3 * self.projectors_num)])
 
-        # Dve linearne mreže
-        self.projector_smooth = nn.Linear(self.hidden_size, self.h, bias=True)
-        self.projector_diff = nn.Linear(self.hidden_size, self.h, bias=True)
+        # Define projectors, one for each set of before_projectors
+        self.projectors = nn.ModuleList([nn.Linear(self.hidden_size, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
 
     def forecast(self, x_enc):
         if self.use_norm:
-            # Normalizacija
+            # Normalization from Non-stationary Transformer
             means = x_enc.mean(1, keepdim=True).detach()
             x_enc = x_enc - means
             stdev = torch.sqrt(
@@ -265,45 +266,35 @@ class HiTransformer(BaseMultivariate):
             )
             x_enc /= stdev
 
-        _, _, N = x_enc.shape  # B L N
+        enc_out = self.enc_embedding(x_enc, None)
 
-        # Embedding
-        enc_out = self.enc_embedding(
-            x_enc, None
-        )
-
-        # Prolaz kroz encoder
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
-        # Zaglađivanje sa EWMA
-        smooth_left = self.ewma(enc_out, alpha=0.1)
-        smooth_right = self.ewma(enc_out.flip(1), alpha=0.1).flip(1)
-        smooth_data = (smooth_left + smooth_right) / 2
+        # Generate predictions using before_projectors and projectors
+        dec_outs = []
+        for i in range(self.projectors_num):
+            # Apply three before_projectors for each projector
+            out1 = self.before_projectors[3 * i](enc_out)
+            out2 = self.before_projectors[3 * i + 1](enc_out)
+            out3 = self.before_projectors[3 * i + 2](enc_out)
 
-        # Razlika između originalnih i zaglađenih vrednosti
-        diff_data = enc_out - smooth_data
+            # Calculate the arithmetic mean of the three outputs
+            avg_out = (out1 + out2 + out3) / 3
 
-        # Prolaz kroz dve odvojene mreže
-        dec_out_smooth = self.projector_smooth(smooth_data).permute(0, 2, 1)[:, :, :N]
-        dec_out_diff = self.projector_diff(diff_data).permute(0, 2, 1)[:, :, :N]
+            # Pass the averaged output through the corresponding projector
+            final_out = self.projectors[i](avg_out).permute(0, 2, 1)
 
-        # Kombinacija rezultata
-        dec_out = dec_out_smooth + dec_out_diff
+            dec_outs.append(final_out)
+
+        # Concatenate the outputs from all projectors
+        dec_out = torch.cat(dec_outs, dim=1)
 
         if self.use_norm:
-            # De-normalizacija
+            # De-Normalization from Non-stationary Transformer
             dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
 
         return dec_out
-
-    def ewma(self, data, alpha):
-        # Implementacija EWMA
-        result = torch.zeros_like(data)
-        result[:, 0, :] = data[:, 0, :]
-        for t in range(1, data.size(1)):
-            result[:, t, :] = alpha * data[:, t, :] + (1 - alpha) * result[:, t - 1, :]
-        return result
 
     def forward(self, windows_batch):
         insample_y = windows_batch["insample_y"]
