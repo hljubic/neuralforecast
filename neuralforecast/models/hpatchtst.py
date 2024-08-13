@@ -18,62 +18,6 @@ from ..common._base_windows import BaseWindows
 
 from ..losses.pytorch import MAE
 
-
-# Definicija CrossDimensionSTAD modula
-class CrossDimensionSTAD(nn.Module):
-    """
-    Cross-Dimension STar Aggregate Dispatch Module
-    """
-
-    def __init__(self, d_series, d_core):
-        super(CrossDimensionSTAD, self).__init__()
-
-        # Linear transformations for cross-dimension dependencies
-        self.gen1 = nn.Linear(d_series, d_series)
-        self.gen2 = nn.Linear(d_series, d_core)
-        self.gen3 = nn.Linear(d_series + d_core, d_series)
-        self.gen4 = nn.Linear(d_series, d_series)
-
-        # Additional linear layer to combine cross-dimension dependencies
-        self.cross_dim_linear = nn.Linear(d_series, d_series)
-
-    def forward(self, input, *args, **kwargs):
-        batch_size, channels, d_series = input.shape
-
-        # Step 1: Calculate the combined mean using first set of linear transformations
-        combined_mean = F.gelu(self.gen1(input))
-        combined_mean = self.gen2(combined_mean)
-
-        # Step 2: Model stochastic pooling with a cross-dimension focus
-        if self.training:
-            ratio = F.softmax(combined_mean, dim=1)
-            ratio = ratio.permute(0, 2, 1)
-            ratio = ratio.reshape(-1, channels)
-            indices = torch.multinomial(ratio, 1)
-            indices = indices.view(batch_size, -1, 1).permute(0, 2, 1)
-            combined_mean = torch.gather(combined_mean, 1, indices)
-            combined_mean = combined_mean.repeat(1, channels, 1)
-        else:
-            weight = F.softmax(combined_mean, dim=1)
-            combined_mean = torch.sum(
-                combined_mean * weight, dim=1, keepdim=True
-            ).repeat(1, channels, 1)
-
-        # Step 3: Concatenate and fuse with original input using an additional linear layer
-        combined_mean_cat = torch.cat([input, combined_mean], -1)
-        combined_mean_cat = F.gelu(self.gen3(combined_mean_cat))
-        combined_mean_cat = self.gen4(combined_mean_cat)
-
-        # Step 4: Apply the cross-dimension linear transformation
-        cross_dim_output = self.cross_dim_linear(combined_mean_cat)
-
-        # Step 5: Generate the final output
-        output = cross_dim_output + combined_mean_cat  # Add cross-dimension output to the original
-
-        return output, None
-
-
-
 # %% ../../nbs/models.hpatchtst.ipynb 9
 class Transpose(nn.Module):
     """
@@ -260,9 +204,7 @@ class RevIN(nn.Module):
             x = x + self.mean
         return x
 
-
-
-# Modifikovana verzija HPatchTST_backbone koja koristi CrossDimensionSTAD
+# %% ../../nbs/models.hpatchtst.ipynb 15
 class HPatchTST_backbone(nn.Module):
     """
     HPatchTST_backbone
@@ -347,9 +289,6 @@ class HPatchTST_backbone(nn.Module):
             learn_pe=learn_pe,
         )
 
-        # Integracija CrossDimensionSTAD modula
-        self.cross_dim_stad = CrossDimensionSTAD(d_series=hidden_size * patch_num, d_core=linear_hidden_size)
-
         # Head
         self.head_nf = hidden_size * patch_num
         self.n_vars = c_in
@@ -372,12 +311,32 @@ class HPatchTST_backbone(nn.Module):
                 head_dropout=head_dropout,
             )
 
+    def ewma(self, data, alpha):
+        # Implementacija EWMA
+        result = torch.zeros_like(data)
+        result[:, 0, :] = data[:, 0, :]
+        for t in range(1, data.size(1)):
+            result[:, t, :] = alpha * data[:, t, :] + (1 - alpha) * result[:, t - 1, :]
+        return result
+
+    def multi_ewma(self, data, base_alpha, iterations):
+        for i in range(iterations):
+            alpha = base_alpha * (i + 1)
+            data = self.ewma(data, alpha)
+        return data
+
     def forward(self, z):  # z: [bs x nvars x seq_len]
         # norm
         if self.revin:
             z = z.permute(0, 2, 1)
             z = self.revin_layer(z, "norm")
             z = z.permute(0, 2, 1)
+
+            smooth_left_copy = self.multi_ewma(z, base_alpha=0.1, iterations=5)
+            smooth_right_copy = self.multi_ewma(z.flip(1), base_alpha=0.1, iterations=5).flip(1)
+
+            # Izračunaj x_enc nakon multi_ewma
+            z = (smooth_left_copy + smooth_right_copy) / 2
 
         # do patching
         if self.padding_patch == "end":
@@ -389,10 +348,6 @@ class HPatchTST_backbone(nn.Module):
 
         # model
         z = self.backbone(z)  # z: [bs x nvars x hidden_size x patch_num]
-
-        # Prolazak kroz CrossDimensionSTAD modul
-        z, _ = self.cross_dim_stad(z)  # z: [bs x nvars x hidden_size x patch_num]
-
         z = self.head(z)  # z: [bs x nvars x h]
 
         # denorm
