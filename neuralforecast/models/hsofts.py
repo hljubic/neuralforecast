@@ -213,6 +213,14 @@ class HSOFTS(BaseMultivariate):
         self.projector_smooth = nn.Linear(self.hidden_size, self.h, bias=True)
         self.projector_diff = nn.Linear(self.hidden_size, self.h, bias=True)
 
+    def ewma(self, data, alpha):
+        # Implementacija EWMA
+        result = torch.zeros_like(data)
+        result[:, 0, :] = data[:, 0, :]
+        for t in range(1, data.size(1)):
+            result[:, t, :] = alpha * data[:, t, :] + (1 - alpha) * result[:, t - 1, :]
+        return result
+
     def forecast(self, x_enc):
         # Normalization from Non-stationary Transformer
         if self.use_norm:
