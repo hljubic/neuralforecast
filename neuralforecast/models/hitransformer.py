@@ -287,7 +287,7 @@ class HiTransformer(BaseMultivariate):
             dec_outs.append(final_out)
 
         # Concatenate the outputs from all projectors
-        dec_out = torch.cat(dec_outs, dim=2)
+        dec_out = torch.cat(dec_outs, dim=1)
 
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
