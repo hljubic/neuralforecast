@@ -262,49 +262,39 @@ class HiTransformer(BaseMultivariate):
             )
             x_enc /= stdev
 
-        # Pamti početnu vrijednost prije diferencijacije
-        initial_value = x_enc[:, 0:1, :]
+            # Differencing (diff(1)) - Zapamti početnu vrednost
+            initial_values = x_enc[:, 0, :].unsqueeze(1).detach()
+            x_enc = x_enc.diff(dim=1)
+            x_enc = torch.cat([initial_values, x_enc], dim=1)  # Dodaj 0 ili početnu vrednost nazad na početak
 
-        # Compute first difference (diff(1))
-        x_enc_diff = x_enc.diff(dim=1)
+            # Apply bidirectional EWMA
+            alpha = 0.2
+            min_val, max_val = x_enc.min(), x_enc.max()
+            # Forward EWMA
+            for t in range(1, x_enc.size(1)):
+                x_enc[:, t, :] = alpha * x_enc[:, t, :] + (1 - alpha) * x_enc[:, t - 1, :]
+            # Backward EWMA
+            for t in range(x_enc.size(1) - 2, -1, -1):
+                x_enc[:, t, :] = alpha * x_enc[:, t, :] + (1 - alpha) * x_enc[:, t + 1, :]
 
-        # Calculate original min and max values before applying EWMA
-        original_min = x_enc_diff.min(dim=1, keepdim=True)[0]
-        original_max = x_enc_diff.max(dim=1, keepdim=True)[0]
+            # Re-scale between min and max
+            x_enc = (x_enc - x_enc.min()) / (x_enc.max() - x_enc.min()) * (max_val - min_val) + min_val
 
-        # Apply EWMA with alpha=0.2
-        alpha = 0.2
-        sequence_length = x_enc_diff.size(1)
-        weights = (alpha * (1 - alpha) ** torch.arange(sequence_length).flip(0).to(x_enc_diff.device))
-
-        # Adjust weights size by adding a 0 at the start to match sequence length
-        weights = torch.cat([torch.zeros(1, device=x_enc_diff.device), weights], dim=0)[1:]
-
-        left_to_right_ewma = torch.cumsum(x_enc_diff * weights, dim=1)
-        right_to_left_ewma = torch.cumsum(x_enc_diff.flip(1) * weights.flip(0), dim=1).flip(1)
-
-        x_enc_smoothed = (left_to_right_ewma + right_to_left_ewma) / 2
-
-        # Re-scale to original min and max
-        x_enc_smoothed = (
-                (x_enc_smoothed - x_enc_smoothed.min(dim=1, keepdim=True)[0])
-                / (x_enc_smoothed.max(dim=1, keepdim=True)[0] - x_enc_smoothed.min(dim=1, keepdim=True)[0])
-        )
-        x_enc_smoothed = x_enc_smoothed * (original_max - original_min) + original_min
+        _, _, N = x_enc.shape  # B L N
 
         # Embedding
-        _, _, N = x_enc_smoothed.shape  # B L N
-        enc_out = self.enc_embedding(x_enc_smoothed, None)
+        enc_out = self.enc_embedding(x_enc, None)
 
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
+        # Projection
         dec_out = self.projector(enc_out).permute(0, 2, 1)[:, :, :N]
 
-        # Undo diff (integration)
-        dec_out = torch.cumsum(dec_out, dim=1)
-        dec_out += initial_value  # Dodaje se originalna početna vrijednost
-
         if self.use_norm:
+            # Reverse differencing (integration)
+            for t in range(1, dec_out.size(1)):
+                dec_out[:, t, :] += dec_out[:, t - 1, :]
+
             # De-Normalization from Non-stationary Transformer
             dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
@@ -322,6 +312,7 @@ class HiTransformer(BaseMultivariate):
             return y_pred.unsqueeze(-1)
         else:
             return y_pred
+
 
     def forecast_org(self, x_enc):
         if self.use_norm:
