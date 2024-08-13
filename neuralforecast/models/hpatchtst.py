@@ -311,20 +311,6 @@ class HPatchTST_backbone(nn.Module):
                 head_dropout=head_dropout,
             )
 
-    def ewma(self, data, alpha):
-        # Implementacija EWMA
-        result = torch.zeros_like(data)
-        result[:, 0, :] = data[:, 0, :]
-        for t in range(1, data.size(1)):
-            result[:, t, :] = alpha * data[:, t, :] + (1 - alpha) * result[:, t - 1, :]
-        return result
-
-    def multi_ewma(self, data, base_alpha, iterations):
-        for i in range(iterations):
-            alpha = base_alpha * (i + 1)
-            data = self.ewma(data, alpha)
-        return data
-
     def forward(self, z):  # z: [bs x nvars x seq_len]
         # norm
         if self.revin:
@@ -332,11 +318,6 @@ class HPatchTST_backbone(nn.Module):
             z = self.revin_layer(z, "norm")
             z = z.permute(0, 2, 1)
 
-        smooth_left_copy = self.multi_ewma(z, base_alpha=0.1, iterations=5)
-        smooth_right_copy = self.multi_ewma(z.flip(1), base_alpha=0.1, iterations=5).flip(1)
-
-        # Izračunaj x_enc nakon multi_ewma
-        z = (smooth_left_copy + smooth_right_copy) / 2
 
         # do patching
         if self.padding_patch == "end":
@@ -469,12 +450,33 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
             store_attn=store_attn,
         )
 
+
+    def ewma(self, data, alpha):
+        # Implementacija EWMA
+        result = torch.zeros_like(data)
+        result[:, 0, :] = data[:, 0, :]
+        for t in range(1, data.size(1)):
+            result[:, t, :] = alpha * data[:, t, :] + (1 - alpha) * result[:, t - 1, :]
+        return result
+
+    def multi_ewma(self, data, base_alpha, iterations):
+        for i in range(iterations):
+            alpha = base_alpha * (i + 1)
+            data = self.ewma(data, alpha)
+        return data
+
     def forward(self, x) -> torch.Tensor:  # x: [bs x nvars x patch_len x patch_num]
 
         n_vars = x.shape[1]
         # Input encoding
         x = x.permute(0, 1, 3, 2)  # x: [bs x nvars x patch_num x patch_len]
         x = self.W_P(x)  # x: [bs x nvars x patch_num x hidden_size]
+
+        smooth_left_copy = self.multi_ewma(x, base_alpha=0.1, iterations=5)
+        smooth_right_copy = self.multi_ewma(x.flip(1), base_alpha=0.1, iterations=5).flip(1)
+
+        # Izračunaj x_enc nakon multi_ewma
+        x = (smooth_left_copy + smooth_right_copy) / 2
 
         u = torch.reshape(
             x, (x.shape[0] * x.shape[1], x.shape[2], x.shape[3])
