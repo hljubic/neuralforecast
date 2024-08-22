@@ -262,7 +262,7 @@ class HiTransformer(BaseMultivariate):
 
     def staging_gauss(self, data):
         # Determine the size of each stage
-        sigmas = [5.0, 3.5, 2.0, 1.0]  # For 4 stages, for example
+        sigmas = [1.0, 0.5, 0.2, 0.1]  # For 4 stages, for example
 
         num_stages = len(sigmas)
         length = data.size(1)
