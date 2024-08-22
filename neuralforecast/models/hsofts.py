@@ -229,7 +229,7 @@ class HSOFTS(BaseMultivariate):
 
     def normalize_frequencies(self, data, target_frequency):
         # Estimate the frequency of each sequence
-        frequencies = estimate_frequency(data)
+        frequencies = self.estimate_frequency(data)
 
         # Calculate scaling factors based on how far each sequence is from the target frequency
         scaling_factors = frequencies / target_frequency
