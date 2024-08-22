@@ -257,7 +257,7 @@ class HiTransformer(BaseMultivariate):
     def multi_ewma(self, data, base_alpha, iterations):
         for i in range(iterations):
             alpha = base_alpha * (i + 1)
-            data = self.gaussian_filter(data, base_alpha)
+            data = self.gaussian_filter(data, 3, base_alpha)
         return data
 
     # Funkcija za primjenu Gaussovog filtera
