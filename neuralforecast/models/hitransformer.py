@@ -260,8 +260,36 @@ class HiTransformer(BaseMultivariate):
             data = self.ewma(data, alpha)
         return data
 
+    def gaussian_filter(self, data, kernel_size = 3, sigma = 1.0):
+        # Kreiraj 1D Gaussov kernel
+        kernel = torch.arange(kernel_size).float() - (kernel_size - 1) / 2
+        kernel = torch.exp(-0.5 * (kernel / sigma).pow(2))
+        kernel = kernel / kernel.sum()  # Normalizacija
+
+        # Pretpostavimo da je vremenska dimenzija na 3. poziciji (npr. 96)
+        kernel = kernel.view(1, 1, -1).to(data.device)
+
+        # Preuredi tensor tako da se vremenska dimenzija nalazi kao 2. dimenzija
+        data = data.permute(0, 1, 3, 2,
+                            4).contiguous()  # Promijenimo redoslijed dimenzija na [batch, channels, time, ...]
+
+        # Spajanje dodatnih dimenzija radi primjene conv1d
+        batch_size, channels, time, *rest = data.shape
+        data = data.view(batch_size * channels, time, -1)
+
+        # Primjena 1D konvolucije
+        smoothed_data = F.conv1d(data, kernel, padding=kernel_size // 2)
+
+        # Razdvajanje natrag u originalne dimenzije
+        smoothed_data = smoothed_data.view(batch_size, channels, time, *rest)
+
+        # Vraćanje u originalni raspored dimenzija
+        smoothed_data = smoothed_data.permute(0, 1, 3, 2, 4).contiguous()
+
+        return smoothed_data
+
     # Funkcija za primjenu Gaussovog filtera
-    def gaussian_filter(self, data, kernel_size = 3, sigma = 1):
+    def gaussian_filte2r(self, data, kernel_size = 3, sigma = 1):
         kernel = torch.arange(kernel_size).float() - (kernel_size - 1) / 2
         kernel = torch.exp(-0.5 * (kernel / sigma).pow(2))
         kernel = kernel / kernel.sum()  # Normalizacija
