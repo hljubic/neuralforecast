@@ -237,6 +237,22 @@ class HSOFTS(BaseMultivariate):
         # Apply Gaussian filter with inverse scaling factor (stronger smoothing for higher frequency sequences)
         length = data.size(1)
         for i in range(data.size(0)):
+            sigma = 1.0 / scaling_factors[i].item() if scaling_factors[i].numel() == 1 else 1.0 / scaling_factors[i][
+                0].item()  # Handle the case of multi-element tensors
+            data[i, :, :] = self.gaussian_filter(data[i:i + 1, :, :], sigma=sigma)
+
+        return data
+
+    def normalize_frequencies2(self, data, target_frequency):
+        # Estimate the frequency of each sequence
+        frequencies = self.estimate_frequency(data)
+
+        # Calculate scaling factors based on how far each sequence is from the target frequency
+        scaling_factors = frequencies / target_frequency
+
+        # Apply Gaussian filter with inverse scaling factor (stronger smoothing for higher frequency sequences)
+        length = data.size(1)
+        for i in range(data.size(0)):
             sigma = 1.0 / scaling_factors[i].item()  # Inverse of scaling factor
             data[i, :, :] = self.gaussian_filter(data[i:i + 1, :, :], sigma=sigma)
 
