@@ -254,7 +254,22 @@ class HiTransformer(BaseMultivariate):
             result[:, t, :] = alpha * data[:, t, :] + (1 - alpha) * result[:, t - 1, :]
         return result
 
-    def gaussian_filter(self, data, kernel_size=3, sigma=50.0):
+    def multi_ewma(self, data, base_alpha, iterations):
+        for i in range(iterations):
+            alpha = base_alpha * (i + 1)
+            data = self.gaussian_filter(data, base_alpha)
+        return data
+
+    # Funkcija za primjenu Gaussovog filtera
+    def gaussian_filter44(self, data, kernel_size = 3, sigma = 1):
+        kernel = torch.arange(kernel_size).float() - (kernel_size - 1) / 2
+        kernel = torch.exp(-0.5 * (kernel / sigma).pow(2))
+        kernel = kernel / kernel.sum()  # Normalizacija
+        kernel = kernel.view(1, 1, -1).to(data.device)
+        smoothed_data = F.conv1d(data.unsqueeze(0).unsqueeze(0), kernel, padding=kernel_size // 2).squeeze(0).squeeze(0)
+        return smoothed_data
+
+    def gaussian_filter(self, data, kernel_size=3, sigma=0.2):
         # Create a 1D Gaussian kernel
         kernel = torch.arange(kernel_size, device=data.device) - (kernel_size - 1) / 2
         kernel = torch.exp(-0.5 * (kernel / sigma) ** 2)
@@ -272,34 +287,6 @@ class HiTransformer(BaseMultivariate):
                                            kernel, padding=kernel_size // 2).squeeze(0).squeeze(0)
         return result
 
-    def gaussian_filter4(self, data, kernel_size=3, sigma=1.0):
-        # Create a 1D Gaussian kernel
-        kernel = torch.arange(kernel_size) - (kernel_size - 1) / 2
-        kernel = torch.exp(-0.5 * (kernel / sigma) ** 2)
-        kernel = kernel / kernel.sum()  # Normalize kernel
-
-        # Apply the Gaussian filter along the time dimension (dim=1)
-        result = torch.zeros_like(data)
-        for i in range(data.size(0)):  # Iterate over the batch
-            for j in range(data.size(2)):  # Iterate over the feature dimension
-                result[i, :, j] = F.conv1d(data[i, :, j].unsqueeze(0).unsqueeze(0),
-                                           kernel.view(1, 1, -1), padding=kernel_size // 2).squeeze(0).squeeze(0)
-        return result
-
-    def multi_ewma(self, data, base_alpha, iterations):
-        for i in range(iterations):
-            alpha = base_alpha * (i + 1)
-            data = self.ewma(data, alpha)
-        return data
-
-    # Funkcija za primjenu Gaussovog filtera
-    def gaussian_filte2r(self, data, kernel_size = 3, sigma = 1):
-        kernel = torch.arange(kernel_size).float() - (kernel_size - 1) / 2
-        kernel = torch.exp(-0.5 * (kernel / sigma).pow(2))
-        kernel = kernel / kernel.sum()  # Normalizacija
-        kernel = kernel.view(1, 1, -1).to(data.device)
-        smoothed_data = F.conv1d(data.unsqueeze(0).unsqueeze(0), kernel, padding=kernel_size // 2).squeeze(0).squeeze(0)
-        return smoothed_data
 
     def forecast(self, x_enc):
         if self.use_norm:
@@ -310,8 +297,8 @@ class HiTransformer(BaseMultivariate):
             )
             x_enc /= stdev
 
-            smooth_left_copy = self.gaussian_filter(x_enc)
-            smooth_right_copy = self.gaussian_filter(x_enc.flip(1)).flip(1)
+            smooth_left_copy = self.multi_ewma(x_enc, base_alpha=0.1, iterations=5)
+            smooth_right_copy = self.multi_ewma(x_enc.flip(1), base_alpha=0.1, iterations=5).flip(1)
 
             x_enc = (smooth_left_copy + smooth_right_copy) / 2
 
