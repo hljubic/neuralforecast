@@ -218,6 +218,47 @@ class HSOFTS(BaseMultivariate):
             [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)]
         )
 
+    def estimate_frequency(data):
+        # Estimate frequency using FFT (Fast Fourier Transform)
+        fft_result = torch.fft.rfft(data, dim=1)
+        # Take the magnitude of the frequencies
+        frequencies = torch.abs(fft_result)
+        # Calculate average frequency magnitude
+        avg_frequency = torch.mean(frequencies, dim=1)
+        return avg_frequency
+
+    def normalize_frequencies(self, data, target_frequency):
+        # Estimate the frequency of each sequence
+        frequencies = estimate_frequency(data)
+
+        # Calculate scaling factors based on how far each sequence is from the target frequency
+        scaling_factors = frequencies / target_frequency
+
+        # Apply Gaussian filter with inverse scaling factor (stronger smoothing for higher frequency sequences)
+        length = data.size(1)
+        for i in range(data.size(0)):
+            sigma = 1.0 / scaling_factors[i].item()  # Inverse of scaling factor
+            data[i, :, :] = self.gaussian_filter(data[i:i + 1, :, :], sigma=sigma)
+
+        return data
+
+    def gaussian_filter(self, data, kernel_size=5, sigma=1.0):
+        # Create a 1D Gaussian kernel
+        kernel = torch.arange(kernel_size, device=data.device) - (kernel_size - 1) / 2
+        kernel = torch.exp(-0.5 * (kernel / sigma) ** 2)
+        kernel = kernel / kernel.sum()  # Normalize kernel
+
+        # Reshape kernel for 1D convolution
+        kernel = kernel.view(1, 1, -1)
+
+        # Apply the Gaussian filter along the time dimension (dim=1)
+        result = torch.zeros_like(data)
+        for i in range(data.size(0)):  # Iterate over the batch
+            for j in range(data.size(2)):  # Iterate over the feature dimension
+                result[i, :, j] = F.conv1d(data[i, :, j].unsqueeze(0).unsqueeze(0),
+                                           kernel, padding=kernel_size // 2).squeeze(0).squeeze(0)
+        return result
+
     def ewma(self, data, alpha):
         result = torch.zeros_like(data)
         result[:, 0, :] = data[:, 0, :]
@@ -241,10 +282,10 @@ class HSOFTS(BaseMultivariate):
             )
             x_enc /= stdev
 
-            smooth_left_copy = self.multi_ewma(x_enc, base_alpha=0.1, iterations=5)
-            smooth_right_copy = self.multi_ewma(x_enc.flip(1), base_alpha=0.1, iterations=5).flip(1)
+            #smooth_left_copy = self.multi_ewma(x_enc, base_alpha=0.1, iterations=5)
+            #smooth_right_copy = self.multi_ewma(x_enc.flip(1), base_alpha=0.1, iterations=5).flip(1)
 
-            x_enc = (smooth_left_copy + smooth_right_copy) / 2
+            x_enc = self.normalize_frequencies(x_enc, 0.75)#(smooth_left_copy + smooth_right_copy) / 2
 
         _, _, N = x_enc.shape
 
