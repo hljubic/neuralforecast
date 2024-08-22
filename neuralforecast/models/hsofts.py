@@ -218,7 +218,7 @@ class HSOFTS(BaseMultivariate):
             [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)]
         )
 
-    def estimate_frequency(data):
+    def estimate_frequency(self, data):
         # Estimate frequency using FFT (Fast Fourier Transform)
         fft_result = torch.fft.rfft(data, dim=1)
         # Take the magnitude of the frequencies
