@@ -260,14 +260,27 @@ class HiTransformer(BaseMultivariate):
             data = self.gaussian_filter(data, 3, base_alpha)
         return data
 
-    # Funkcija za primjenu Gaussovog filtera
-    def gaussian_filter44(self, data, kernel_size = 3, sigma = 1):
-        kernel = torch.arange(kernel_size).float() - (kernel_size - 1) / 2
-        kernel = torch.exp(-0.5 * (kernel / sigma).pow(2))
-        kernel = kernel / kernel.sum()  # Normalizacija
-        kernel = kernel.view(1, 1, -1).to(data.device)
-        smoothed_data = F.conv1d(data.unsqueeze(0).unsqueeze(0), kernel, padding=kernel_size // 2).squeeze(0).squeeze(0)
-        return smoothed_data
+    def staging_gauss(self, data):
+        # Determine the size of each stage
+        sigmas = [2.0, 1.5, 1.0, 0.5]  # For 4 stages, for example
+
+        num_stages = len(sigmas)
+        length = data.size(1)
+        stage_size = length // num_stages
+
+        # Apply Gaussian filter for each stage using the specified sigma values
+        for i in range(num_stages):
+            start_idx = i * stage_size
+            # Handle the last stage by including any remaining data (in case the data doesn't divide evenly)
+            if i == num_stages - 1:
+                end_idx = length
+            else:
+                end_idx = (i + 1) * stage_size
+
+            # Apply the Gaussian filter for the current stage
+            data[:, start_idx:end_idx, :] = self.gaussian_filter(data[:, start_idx:end_idx, :], sigma=sigmas[i])
+
+        return data
 
     def gaussian_filter(self, data, kernel_size=3, sigma=0.2):
         # Create a 1D Gaussian kernel
@@ -297,10 +310,11 @@ class HiTransformer(BaseMultivariate):
             )
             x_enc /= stdev
 
-            smooth_left_copy = self.multi_ewma(x_enc, base_alpha=0.1, iterations=5)
-            smooth_right_copy = self.multi_ewma(x_enc.flip(1), base_alpha=0.1, iterations=5).flip(1)
+            #smooth_left_copy = self.multi_ewma(x_enc, base_alpha=0.1, iterations=5)
+            #smooth_right_copy = self.multi_ewma(x_enc.flip(1), base_alpha=0.1, iterations=5).flip(1)
 
-            x_enc = (smooth_left_copy + smooth_right_copy) / 2
+            smooth_left_copy = self.staging_gauss(x_enc)
+            x_enc = smooth_left_copy#(smooth_left_copy + smooth_right_copy) / 2
 
         _, _, N = x_enc.shape
 
