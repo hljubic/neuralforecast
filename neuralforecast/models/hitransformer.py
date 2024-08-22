@@ -254,7 +254,7 @@ class HiTransformer(BaseMultivariate):
             result[:, t, :] = alpha * data[:, t, :] + (1 - alpha) * result[:, t - 1, :]
         return result
 
-    def gaussian_filter(self, data, kernel_size=3, sigma=5.0):
+    def gaussian_filter(self, data, kernel_size=3, sigma=50.0):
         # Create a 1D Gaussian kernel
         kernel = torch.arange(kernel_size, device=data.device) - (kernel_size - 1) / 2
         kernel = torch.exp(-0.5 * (kernel / sigma) ** 2)
