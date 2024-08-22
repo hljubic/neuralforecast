@@ -301,7 +301,7 @@ class HSOFTS(BaseMultivariate):
             #smooth_left_copy = self.multi_ewma(x_enc, base_alpha=0.1, iterations=5)
             #smooth_right_copy = self.multi_ewma(x_enc.flip(1), base_alpha=0.1, iterations=5).flip(1)
 
-            x_enc = self.normalize_frequencies(x_enc, 0.1)#(smooth_left_copy + smooth_right_copy) / 2
+            x_enc = self.normalize_frequencies(x_enc, 10.1)#(smooth_left_copy + smooth_right_copy) / 2
 
         _, _, N = x_enc.shape
 
