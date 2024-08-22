@@ -197,8 +197,12 @@ class HSOFTS(BaseMultivariate):
 
         self.hidden_size = hidden_size
 
-        # Zamena TransEncoder sa nn.Linear
-        self.encoder = nn.Linear(self.hidden_size, self.hidden_size)
+        # Dva enkodera, jedan za srednje vrednosti, drugi za razlike
+        self.encoder_means = nn.Linear(self.hidden_size, self.hidden_size)
+        self.encoder_differences = nn.Linear(self.hidden_size, self.hidden_size)
+
+        # Finalni linearni sloj
+        self.final = nn.Linear(self.hidden_size, self.h)  # Dimenzija ostaje hidden_size jer sabiramo enkodere
 
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
         self.projectors_num = 3
@@ -291,24 +295,26 @@ class HSOFTS(BaseMultivariate):
     def forecast(self, x_enc):
         # Normalizacija iz Non-stationary Transformera
         if self.use_norm:
-            means = x_enc.mean(1, keepdim=True).detach()
-            x_enc = x_enc - means
+            means = x_enc.mean(1, keepdim=True).detach()  # Srednje vrednosti po sekvenci
+            x_diff = x_enc - means  # Razlike x_enc - srednje vrednosti
+
             stdev = torch.sqrt(
-                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
+                torch.var(x_diff, dim=1, keepdim=True, unbiased=False) + 1e-5
             )
-            x_enc /= stdev
+            x_diff /= stdev
 
-            #smooth_left_copy = self.multi_ewma(x_enc, base_alpha=0.1, iterations=5)
-            #smooth_right_copy = self.multi_ewma(x_enc.flip(1), base_alpha=0.1, iterations=5).flip(1)
-
-            x_enc = self.normalize_frequencies(x_enc, 10.1)#(smooth_left_copy + smooth_right_copy) / 2
+            # Normalizacija frekvencija na razlikama
+            x_diff = self.normalize_frequencies(x_diff, 10.1)
 
         _, _, N = x_enc.shape
 
-        enc_out = self.enc_embedding(x_enc, None)
+        # Enkodiranje srednjih vrednosti i razlika
+        enc_out_means = self.encoder_means(means)
+        enc_out_diff = self.encoder_differences(x_diff)
 
-        # Zamena TransEncoder sa nn.Linear
-        enc_out = self.encoder(enc_out)
+        # Sabiranje rezultata dvaju enkodera
+        enc_out = enc_out_means + enc_out_diff
+
 
         # Generisanje predikcija iz svakog segmenta korišćenjem odgovarajućih projektora
         dec_outs = []
