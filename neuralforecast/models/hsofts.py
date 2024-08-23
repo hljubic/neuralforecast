@@ -293,7 +293,8 @@ class HSOFTS(BaseMultivariate):
         self.lstm = nn.LSTM(input_size=8, hidden_size=h, num_layers=1, batch_first=True)
 
         # Projection layer
-        self.projection = nn.Linear(hidden_size, h, bias=True)
+        #self.projection = nn.Linear(hidden_size, h, bias=True)
+        self.projection = nn.Linear(336, h)
 
     def forecast(self, x_enc):
         # Normalization
