@@ -368,7 +368,6 @@ class HPatchTST_backbone(nn.Module):
         if self.revin:
             z = z.permute(0, 2, 1)
             z = self.revin_layer(z, "norm")
-            z = z.permute(0, 2, 1)
 
         print("xx1")
         # Smoothed data (e.g., Gaussian filter)
@@ -399,6 +398,7 @@ class HPatchTST_backbone(nn.Module):
         print("xx5")
         # Summing the outputs of both encoders
         z = enc_smooth_out + enc_residual_out
+        z = z.permute(0, 2, 1)
 
         # do patching
         if self.padding_patch == "end":
