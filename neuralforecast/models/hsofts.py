@@ -15,31 +15,10 @@ from ..common._modules import TransEncoder, TransEncoderLayer
 import math
 
 
-class PositionalEncoding2(nn.Module):
-    def __init__(self, d_model, max_len=5000):
-        super(PositionalEncoding, self).__init__()
-
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
-
-        self.register_buffer('pe', pe)
-
-    def forward(self, x):
-        # Apply positional encoding to input
-        x = x + self.pe[:x.size(0), :]
-        return x
-
-
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
         super(PositionalEncoding, self).__init__()
 
-        # Create a long enough positional encoding table
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
@@ -51,18 +30,38 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        # x: [Batch, Columns, Horizon] -> We need Horizon for position encoding
-        # Ensure that positional encoding matches the Horizon dimension
-        horizon_length = x.size(2)
-        pe = self.pe[:horizon_length, :].permute(1, 0, 2)  # Rearrange to [1, Horizon, d_model]
-
-        # Add positional encoding to the input
-        x = x + pe
+        x = x + self.pe[:x.size(0), :]
         return x
 
 
-# %% ../../nbs/models.hsofts.ipynb 6
 class DataEmbedding_inverted(nn.Module):
+    """
+    Data Embedding with Positional Encoding
+    """
+
+    def __init__(self, c_in, d_model, dropout=0.1, max_len=5000):
+        super(DataEmbedding_inverted, self).__init__()
+        self.value_embedding = nn.Linear(c_in, d_model)
+        self.position_encoding = PositionalEncoding(d_model, max_len)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x, x_mark=None):
+        x = x.permute(0, 2, 1)
+        # x: [Batch, Variate, Time]
+        if x_mark is None:
+            x = self.value_embedding(x)
+        else:
+            # concatenate additional covariates if available
+            x = self.value_embedding(torch.cat([x, x_mark.permute(0, 2, 1)], 1))
+
+        # Apply positional encoding
+        x = self.position_encoding(x)
+
+        return self.dropout(x)
+
+
+# %% ../../nbs/models.hsofts.ipynb 6
+class DataEmbedding_inverted_orig(nn.Module):
     """
     Data Embedding
     """
@@ -245,7 +244,7 @@ class HSOFTS(BaseMultivariate):
         self.projectors_num = 4
 
         # Architecture
-        self.enc_embedding = PositionalEncoding(input_size, hidden_size)
+        self.enc_embedding = DataEmbedding_inverted(input_size, hidden_size)
 
         self.encoder2 = TransEncoder(
             [
