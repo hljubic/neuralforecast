@@ -356,7 +356,7 @@ class HSOFTS(BaseMultivariate):
 
 
         # Pass through LSTM
-        lstm_out, _ = self.lstm(dec_out.permute(0, 2, 1))
+        lstm_out, _ = self.lstm(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
 
         # Apply projection on LSTM output
         dec_out = self.projection(lstm_out).permute(0, 2, 1)[:, :, :N]
