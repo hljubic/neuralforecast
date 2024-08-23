@@ -286,11 +286,13 @@ class HSOFTS(BaseMultivariate):
         self.additional_projectors = nn.ModuleList(
             [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)]
         )
-        self.rnn = nn.LSTM(input_size=h, hidden_size=h, batch_first=True)
-        #self.rnn_output = nn.Linear(h, n_series)
 
-        # Output layer after RNN
-        self.rnn_output = nn.Linear(h, n_series)
+
+        # Add LSTM layer
+        self.lstm = nn.LSTM(input_size=hidden_size, hidden_size=hidden_size, num_layers=1, batch_first=True)
+
+        # Projection layer
+        self.projection = nn.Linear(hidden_size, h, bias=True)
 
     def forecast(self, x_enc):
         # Normalization
@@ -301,6 +303,17 @@ class HSOFTS(BaseMultivariate):
 
         # Smoothed data (e.g., Gaussian filter)
         smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=2.75)
+        '''
+        # Initialize smoothed output tensor
+        smoothed_x_enc = torch.zeros_like(x_enc)
+
+        # Apply Gaussian filter to each quarter
+        for i in range(4):
+            start = i * quarter_len
+            end = (i + 1) * quarter_len if i < 3 else seq_len  # The last quarter takes any remaining data
+            smoothed_x_enc[:, start:end, :] = self.gaussian_filter(x_enc[:, start:end, :], kernel_size=3,
+                                                                   sigma=sigmas[i])
+        '''
         residual_x_enc = x_enc - smoothed_x_enc
 
         # Save min and max values before smoothing residuals
@@ -339,19 +352,17 @@ class HSOFTS(BaseMultivariate):
 
         dec_out = torch.cat(final_outs, dim=1)
 
+
+        # Pass through LSTM
+        lstm_out, _ = self.lstm(dec_out)
+
+        # Apply projection on LSTM output
+        dec_out = self.projection(lstm_out).permute(0, 2, 1)[:, :, :N]
+
         # Reapply normalization
         if self.use_norm:
             dec_out = dec_out * stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
             dec_out = dec_out + means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
-
-        # Reshape dec_out for the RNN input
-        dec_out = dec_out.permute(0, 2, 1)  # Shape [batch_size, seq_len, features]
-
-        # Pass the dec_out through GRU/LSTM
-        dec_out, _ = self.rnn(dec_out)
-
-        # Output layer after RNN
-        dec_out = self.rnn_output(dec_out)
 
         return dec_out
 
