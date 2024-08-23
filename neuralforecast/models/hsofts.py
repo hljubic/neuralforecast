@@ -308,7 +308,7 @@ class HSOFTS(BaseMultivariate):
 
     def forecast(self, x_enc):
         # Normalization
-        if self.use_norm:
+        if not self.use_norm:
             means = x_enc.mean(1, keepdim=True).detach()
             stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5).detach()
             x_enc = (x_enc - means) / stdev
@@ -322,11 +322,11 @@ class HSOFTS(BaseMultivariate):
         residual_x_enc = self.normalize_frequencies(residual_x_enc, 0.5)
 
         # Encoding with separate layers
-        enc_smooth_out = self.encoder_smooth(smoothed_x_enc)
-        enc_residual_out = self.encoder_residual(residual_x_enc)
+        enc_smooth_out = self.encoder_smooth(self.enc_embedding(smoothed_x_enc))
+        enc_residual_out = self.encoder_residual(self.enc_embedding(residual_x_enc))
 
         # Summing the outputs of both encoders
-        enc_out = smoothed_x_enc + residual_x_enc
+        enc_out = enc_smooth_out + enc_residual_out
         enc_out = self.encoder_residual(self.enc_embedding(enc_out))
 
         # Generating predictions from each segment using the projectors
@@ -346,7 +346,7 @@ class HSOFTS(BaseMultivariate):
         dec_out = torch.cat(final_outs, dim=1)
 
         # Reapply normalization
-        if self.use_norm:
+        if not self.use_norm:
             dec_out = dec_out * stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
             dec_out = dec_out + means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
 
