@@ -338,7 +338,7 @@ class HSOFTS(BaseMultivariate):
         # Generating predictions from each segment using the projectors
         dec_outs = []
         for i, projector in enumerate(self.projectors):
-            dec_outs.append(projector(enc_out))
+            dec_outs.append(projector(enc_out).permute(0, 2, 1))
 
         '''
         # Concatenate outputs and pass through the final layer
