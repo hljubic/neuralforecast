@@ -340,9 +340,9 @@ class HSOFTS(BaseMultivariate):
         # Summing the outputs of both encoders
         enc_out = enc_smooth_out + enc_residual_out
 
-        return enc_out
         enc_out = self.bridge1(enc_out)
         enc_out = self.bridge2(enc_out)
+        return enc_out
         '''
 
         # Generating predictions from each segment using the projectors
