@@ -347,16 +347,17 @@ class HSOFTS(BaseMultivariate):
 
         dec_out = torch.cat(final_outs, dim=1)
 
-        # Reapply normalization
-        if self.use_norm:
-            dec_out = dec_out * stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
-            dec_out = dec_out + means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
-
         # Pass the dec_out through GRU/LSTM
         dec_out, _ = self.rnn(dec_out)
 
         # Output layer after RNN
         dec_out = self.rnn_output(dec_out).permute(0, 2, 1)
+
+        # Reapply normalization
+        if self.use_norm:
+            dec_out = dec_out * stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
+            dec_out = dec_out + means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
+
 
         return dec_out
 
