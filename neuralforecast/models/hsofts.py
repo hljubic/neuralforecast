@@ -404,7 +404,7 @@ class HSOFTS(BaseMultivariate):
         for i in range(data.size(0)):
             sigma = 1.0 / scaling_factors[i].item() if scaling_factors[i].numel() == 1 else 1.0 / scaling_factors[i][
                 0].item()  # Handle the case of multi-element tensors
-            data[i, :, :] = self.gaussian_filter(data[i:i + 1, :, :], sigma=sigma)
+            data[i, :, :] = self.gaussian_filter(data[i:i + 1, :, :], kernel_size=3, sigma=sigma)
 
         return data
 
