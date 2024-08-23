@@ -306,6 +306,24 @@ class HSOFTS(BaseMultivariate):
 
         return smoothed_tensor
 
+    def low_pass_filter(self, input_tensor, kernel_size, sigma):
+        """
+        Apply a low-pass (smoothing) filter to extract low-frequency components.
+        """
+        kernel = torch.arange(kernel_size, dtype=torch.float32) - (kernel_size - 1) / 2.0
+        kernel = torch.exp(-0.5 * (kernel / sigma) ** 2)
+        kernel = kernel / kernel.sum()  # Normalize
+        kernel = kernel.view(1, 1, -1).to(input_tensor.device)
+
+        smoothed_tensor = []
+        num_features = input_tensor.size(2)
+        for i in range(num_features):
+            feature_tensor = input_tensor[:, :, i].unsqueeze(1)  # [batch_size, 1, seq_len]
+            smoothed_feature = F.conv1d(feature_tensor, kernel, padding=(kernel_size - 1) // 2)
+            smoothed_tensor.append(smoothed_feature)
+        smoothed_tensor = torch.cat(smoothed_tensor, dim=1).permute(0, 2, 1)
+
+        return smoothed_tensor
     def forecast(self, x_enc):
         # Normalization
         if self.use_norm:
