@@ -277,7 +277,6 @@ class HSOFTS(BaseMultivariate):
         self.encoder_residual = nn.Linear(hidden_size, hidden_size)
         # Projectors for each segment
         self.projectors = nn.ModuleList([nn.Linear(hidden_size, h, bias=True) for _ in range(self.projectors_num)])
-        self.self_attention = nn.MultiheadAttention(embed_dim=self.h, num_heads=8)
 
         # Final Linear layer
         self.final = nn.Linear(h * self.projectors_num, h, bias=True)
@@ -347,15 +346,10 @@ class HSOFTS(BaseMultivariate):
         dec_out = torch.cat(dec_outs, dim=2)
         dec_out = self.final(dec_out)
 
-        # Apply self-attention after the final linear layer
-        dec_out = dec_out.permute(1, 0, 2)  # Shape for attention [seq_len, batch_size, hidden_size]
-        attn_out, _ = self.self_attention(dec_out, dec_out, dec_out)
-        attn_out = attn_out.permute(1, 0, 2)  # Back to [batch_size, seq_len, hidden_size]
-
-        # Additional projectors after final
+        # Additional projectors after the final
         final_outs = []
         for projector in self.additional_projectors:
-            final_outs.append(projector(attn_out).permute(0, 2, 1))
+            final_outs.append(projector(dec_out).permute(0, 2, 1))
 
         dec_out = torch.cat(final_outs, dim=1)
 
