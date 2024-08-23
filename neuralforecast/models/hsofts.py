@@ -195,32 +195,21 @@ class HSOFTS(BaseMultivariate):
         # Architecture
         self.enc_embedding = DataEmbedding_inverted(input_size, hidden_size, dropout)
 
-        self.hidden_size = hidden_size
-
-        # Dva enkodera, jedan za srednje vrednosti, drugi za razlike
-        self.encoder_means = nn.Linear(self.hidden_size, self.hidden_size)
-        self.encoder_differences = nn.Linear(self.hidden_size, self.hidden_size)
-
-        # Finalni linearni sloj
-        self.final = nn.Linear(self.hidden_size, self.h)  # Dimenzija ostaje hidden_size jer sabiramo enkodere
+        self.encoder = TransEncoder(
+            [
+                TransEncoderLayer(
+                    STAD(hidden_size, d_core),
+                    hidden_size,
+                    d_ff,
+                    dropout=dropout,
+                    activation=F.gelu,
+                )
+                for l in range(e_layers)
+            ]
+        )
 
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
-        self.projectors_num = 3
 
-        self.projector = nn.Linear(self.hidden_size, h, bias=True)
-
-        # Definišite listu projektora, jedan za svaki segment
-        self.projectors = nn.ModuleList(
-            [nn.Linear(self.hidden_size, h, bias=True) for _ in range(self.projectors_num)]
-        )
-
-        # Finalni linearni sloj
-        self.final = nn.Linear(h * self.projectors_num, h, bias=True)
-
-        # Definišite dodatne projektore nakon finalnog sloja
-        self.additional_projectors = nn.ModuleList(
-            [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)]
-        )
 
     def estimate_frequency(self, data):
         # Estimate frequency using FFT (Fast Fourier Transform)
@@ -279,66 +268,28 @@ class HSOFTS(BaseMultivariate):
                                            kernel, padding=kernel_size // 2).squeeze(0).squeeze(0)
         return result
 
-    def ewma(self, data, alpha):
-        result = torch.zeros_like(data)
-        result[:, 0, :] = data[:, 0, :]
-        for t in range(1, data.size(1)):
-            result[:, t, :] = alpha * data[:, t, :] + (1 - alpha) * result[:, t - 1, :]
-        return result
-
-    def multi_ewma(self, data, base_alpha, iterations):
-        for i in range(iterations):
-            alpha = base_alpha * (i + 1)
-            data = self.ewma(data, alpha)
-        return data
-
     def forecast(self, x_enc):
-        # Normalizacija iz Non-stationary Transformera
+        # Normalization from Non-stationary Transformer
         if self.use_norm:
-            means = x_enc.mean(1, keepdim=True).detach()  # Srednje vrednosti po sekvenci
-            x_diff = x_enc - means  # Razlike x_enc - srednje vrednosti
-
+            means = x_enc.mean(1, keepdim=True).detach()
+            x_enc = x_enc - means
             stdev = torch.sqrt(
-                torch.var(x_diff, dim=1, keepdim=True, unbiased=False) + 1e-5
+                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
             )
-            x_diff /= stdev
+            x_enc /= stdev
 
-            # Normalizacija frekvencija na razlikama
-            x_diff = self.normalize_frequencies(x_diff, 10.1)
+            x_enc = self.normalize_frequencies(x_enc, 0.75)#(smooth_left_copy + smooth_right_copy) / 2
+
 
         _, _, N = x_enc.shape
+        enc_out = self.enc_embedding(x_enc, None)
+        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+        dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
 
-        # Enkodiranje srednjih vrednosti i razlika
-        enc_out_means = self.encoder_means(means)
-        enc_out_diff = self.encoder_differences(x_diff)
-
-        # Sabiranje rezultata dvaju enkodera
-        enc_out = enc_out_means + enc_out_diff
-
-
-        # Generisanje predikcija iz svakog segmenta korišćenjem odgovarajućih projektora
-        dec_outs = []
-        for i, projector in enumerate(self.projectors):
-            dec_outs.append(projector(enc_out))
-
-        # Konkatenacija izlaza iz svih projektora
-        dec_out = torch.cat(dec_outs, dim=2)
-
-        # Prolaz kroz finalni linearni sloj
-        dec_out = self.final(dec_out)
-
-        # Dodatni projektori nakon finalnog sloja
-        final_outs = []
-        for projector in self.additional_projectors:
-            final_outs.append(projector(dec_out).permute(0, 2, 1))
-
-        dec_out = torch.cat(final_outs, dim=1)
-
-        # De-normalizacija iz Non-stationary Transformera
+        # De-Normalization from Non-stationary Transformer
         if self.use_norm:
             dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-
         return dec_out
 
     def forward(self, windows_batch):
