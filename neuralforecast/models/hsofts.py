@@ -81,8 +81,7 @@ class DataEmbedding_inverted(nn.Module):
         slope_embedding = self.calculate_slope_embedding(x)
 
         # Combine the original embedding with the slope embedding
-        combined_embedding = slope_embedding
-        combined_embedding = self.layer_norm(combined_embedding)
+        combined_embedding = x + self.layer_norm(slope_embedding)
 
         return self.dropout(combined_embedding)
 
