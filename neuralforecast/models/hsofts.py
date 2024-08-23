@@ -337,7 +337,7 @@ class HSOFTS(BaseMultivariate):
         enc_residual_out = self.encoder_residual(self.enc_embedding(residual_x_enc))
 
         # Summing the outputs of both encoders
-        enc_out = enc_smooth_out# + enc_residual_out
+        enc_out = enc_residual_out
 
 
         #_, _, N = x_enc.shape
