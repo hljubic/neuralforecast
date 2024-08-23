@@ -12,51 +12,48 @@ from ..losses.pytorch import MAE
 from ..common._base_multivariate import BaseMultivariate
 from ..common._modules import TransEncoder, TransEncoderLayer
 
-
-import torch
-import torch.nn as nn
 import math
 
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0).transpose(0, 1)
+
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        x = x + self.pe[:x.size(0), :]
+        return x
+
+
+# %% ../../nbs/models.hsofts.ipynb 6
 class DataEmbedding_inverted(nn.Module):
     """
-    Data Embedding with Positional Encoding (Sinusoidal)
+    Data Embedding
     """
 
-    def __init__(self, c_in, d_model, dropout=0.1, max_len=5000):
+    def __init__(self, c_in, d_model, dropout=0.1):
         super(DataEmbedding_inverted, self).__init__()
         self.value_embedding = nn.Linear(c_in, d_model)
         self.dropout = nn.Dropout(p=dropout)
 
-        # Create the positional encoding matrix
-        self.positional_encoding = self.create_positional_encoding(d_model, max_len)
-
-    def create_positional_encoding(self, d_model, max_len):
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0)  # Shape: [1, max_len, d_model]
-        return pe
-
-    def forward(self, x, x_mark=None):
-        # x: [Batch, Variate, Time]
-        batch_size, variate_size, seq_len = x.size()
-
-        # Apply value embedding
+    def forward(self, x, x_mark):
+        x = x.permute(0, 2, 1)
+        # x: [Batch Variate Time]
         if x_mark is None:
-            x = self.value_embedding(x.permute(0, 2, 1))  # [Batch, Time, d_model]
+            x = self.value_embedding(x)
         else:
-            x = self.value_embedding(torch.cat([x.permute(0, 2, 1), x_mark.permute(0, 2, 1)], -1))  # [Batch, Time, d_model]
-
-        # Apply positional encoding (ensure sequence length matches)
-        pos_enc = self.positional_encoding[:, :seq_len, :].to(x.device)  # [1, seq_len, d_model]
-
-        # Add positional encoding to the input embeddings
-        x = x + pos_enc
-
-        return self.dropout(x).permute(0, 2, 1)  # Return to [Batch, Variate, d_model]
-
+            # the potential to take covariates (e.g. timestamps) as tokens
+            x = self.value_embedding(torch.cat([x, x_mark.permute(0, 2, 1)], 1))
+        # x: [Batch Variate d_model]
+        return self.dropout(x)
 
 # %% ../../nbs/models.hsofts.ipynb 8
 class STAD(nn.Module):
@@ -220,7 +217,7 @@ class HSOFTS(BaseMultivariate):
         self.projectors_num = 4
 
         # Architecture
-        self.enc_embedding = DataEmbedding_inverted(input_size, hidden_size, dropout)
+        self.enc_embedding = PositionalEncoding(input_size, hidden_size)
 
         self.encoder2 = TransEncoder(
             [
