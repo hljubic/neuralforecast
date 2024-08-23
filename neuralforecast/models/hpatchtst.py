@@ -204,6 +204,53 @@ class RevIN(nn.Module):
             x = x + self.mean
         return x
 
+
+class DataEmbedding_inverted(nn.Module):
+    """
+    Data Embedding with Positional Encoding and slope calculations.
+    """
+
+    def __init__(self, c_in, d_model, dropout=0.1, max_len=5000):
+        super(DataEmbedding_inverted, self).__init__()
+        self.value_embedding = nn.Linear(c_in, d_model)
+        self.position_encoding = PositionalEncoding(d_model, max_len)
+        self.dropout = nn.Dropout(p=dropout)
+        self.layer_norm = nn.LayerNorm(d_model)
+
+
+    def calculate_slope_embedding(self, x):
+        # x: [Batch, Variate, Time]
+        # For each time step, calculate slope based on previous time steps
+        batch_size, variate_size, time_size = x.size()
+        slopes = torch.zeros(batch_size, variate_size, time_size).to(x.device)
+
+        # Loop through time steps to calculate slope from position 0 to current
+        for t in range(1, time_size):  # Starting from t=1 since t=0 has no previous points
+            slopes[:, :, t] = (x[:, :, t] - x[:, :, 0]) / t  # Calculate slope from point 0 to t
+
+        return slopes
+
+    def forward(self, x, x_mark=None):
+        x = x.permute(0, 2, 1)
+        # x: [Batch, Variate, Time]
+        if x_mark is None:
+            x = self.value_embedding(x)
+        else:
+            # concatenate additional covariates if available
+            x = self.value_embedding(torch.cat([x, x_mark.permute(0, 2, 1)], 1))
+
+        # Apply positional encoding
+        x = self.position_encoding(x)
+
+        # Calculate slope embedding for each time point
+        #slope_embedding = self.calculate_slope_embedding(x)
+
+        # Combine the original embedding with the slope embedding
+        combined_embedding = x# + slope_embedding
+
+        return self.dropout(self.layer_norm(combined_embedding))
+
+
 # %% ../../nbs/models.hpatchtst.ipynb 15
 class HPatchTST_backbone(nn.Module):
     """
@@ -296,6 +343,7 @@ class HPatchTST_backbone(nn.Module):
         self.pretrain_head = pretrain_head
         self.head_type = head_type
         self.individual = individual
+        self.enc_embedding = DataEmbedding_inverted(input_size, hidden_size)
 
         if self.pretrain_head:
             self.head = self.create_pretrain_head(
@@ -318,14 +366,31 @@ class HPatchTST_backbone(nn.Module):
             z = self.revin_layer(z, "norm")
             z = z.permute(0, 2, 1)
 
-        print("aaa")
-        print("aaa")
-        print("aaa")
-        print("aaa")
-        print("aaa")
-        print("aaa")
-        print("aaa")
-        print("aaa")
+        # Smoothed data (e.g., Gaussian filter)
+        smoothed_x_enc = self.gaussian_filter(z, kernel_size=3, sigma=2.75)
+
+        residual_x_enc = x_enc - smoothed_x_enc
+
+        # Save min and max values before smoothing residuals
+        min_vals_residual = residual_x_enc.min(dim=1, keepdim=True)[0]
+        max_vals_residual = residual_x_enc.max(dim=1, keepdim=True)[0]
+
+        # Apply Gaussian filter to residuals
+        residual_x_enc = self.gaussian_filter(residual_x_enc, kernel_size=3, sigma=1.75)
+
+        # Rescale residuals back to the original min-max range
+        residual_x_enc = (residual_x_enc - residual_x_enc.min(dim=1, keepdim=True)[0]) / \
+                         (residual_x_enc.max(dim=1, keepdim=True)[0] - residual_x_enc.min(dim=1, keepdim=True)[
+                             0] + 1e-5) * \
+                         (max_vals_residual - min_vals_residual) + min_vals_residual
+
+        # Encoding with separate layers
+        enc_smooth_out = self.encoder_smooth(self.enc_embedding(smoothed_x_enc))
+        enc_residual_out = self.encoder_residual(self.enc_embedding(residual_x_enc))
+
+        # Summing the outputs of both encoders
+        z = enc_smooth_out + enc_residual_out
+
         # do patching
         if self.padding_patch == "end":
             z = self.padding_patch_layer(z)
@@ -344,6 +409,41 @@ class HPatchTST_backbone(nn.Module):
             z = self.revin_layer(z, "denorm")
             z = z.permute(0, 2, 1)
         return z
+
+
+    def gaussian_filter(self, input_tensor, kernel_size, sigma):
+        """
+        Apply a Gaussian filter to smooth the input_tensor.
+
+        Args:
+            input_tensor (torch.Tensor): The input tensor to be smoothed (batch_size, seq_len, num_features).
+            kernel_size (int): The size of the Gaussian kernel.
+            sigma (float): The standard deviation of the Gaussian distribution.
+
+        Returns:
+            torch.Tensor: The smoothed tensor.
+        """
+        # Create a 1D Gaussian kernel
+        kernel = torch.arange(kernel_size, dtype=torch.float32) - (kernel_size - 1) / 2.0
+        kernel = torch.exp(-0.5 * (kernel / sigma) ** 2)
+        kernel = kernel / kernel.sum()  # Normalize the kernel to ensure sum is 1
+
+        # Ensure the kernel is expanded for each feature (group)
+        kernel = kernel.view(1, 1, -1).to(input_tensor.device)
+
+        # Apply Gaussian filter for each feature across the sequence dimension
+        num_features = input_tensor.size(2)
+        smoothed_tensor = []
+        for i in range(num_features):
+            # Select the i-th feature (sequence length along the dimension 1)
+            feature_tensor = input_tensor[:, :, i].unsqueeze(1)  # [batch_size, 1, seq_len]
+            smoothed_feature = F.conv1d(feature_tensor, kernel, padding=(kernel_size - 1) // 2)
+            smoothed_tensor.append(smoothed_feature)
+
+        # Concatenate along the feature dimension (dim=2)
+        smoothed_tensor = torch.cat(smoothed_tensor, dim=1).permute(0, 2, 1)
+
+        return smoothed_tensor
 
     def create_pretrain_head(self, head_nf, vars, dropout):
         return nn.Sequential(nn.Dropout(dropout), nn.Conv1d(head_nf, vars, 1))
