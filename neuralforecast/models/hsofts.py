@@ -344,6 +344,9 @@ class HSOFTS(BaseMultivariate):
             dec_out = dec_out * stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
             dec_out = dec_out + means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
 
+        # Reshape dec_out for the RNN input
+        dec_out = dec_out.permute(0, 2, 1)  # Shape [batch_size, seq_len, features]
+
         # Pass the dec_out through GRU/LSTM
         dec_out, _ = self.rnn(dec_out)
 
