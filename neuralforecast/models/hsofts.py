@@ -319,8 +319,8 @@ class HSOFTS(BaseMultivariate):
         # Residuals (differences from smoothed data)
         residual_x_enc = x_enc - smoothed_x_enc
 
-        smoothed_x_enc = self.normalize_frequencies(smoothed_x_enc, 0.5)
-        residual_x_enc = self.normalize_frequencies(residual_x_enc, 0.5)
+        #smoothed_x_enc = self.normalize_frequencies(smoothed_x_enc, 0.5)
+        residual_x_enc = self.gaussian_filter(residual_x_enc, kernel_size=3, sigma=1.75)
 
         # Encoding with separate layers
         enc_smooth_out = self.encoder_smooth(self.enc_embedding(smoothed_x_enc))
