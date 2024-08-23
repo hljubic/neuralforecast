@@ -352,6 +352,7 @@ class HSOFTS(BaseMultivariate):
         '''
 
         dec_out = torch.cat(dec_outs, dim=2)
+        dec_out = self.final(dec_out)
 
         # Reapply normalization
         if self.use_norm:
