@@ -299,6 +299,39 @@ class HSOFTS(BaseMultivariate):
         self.additional_projectors = nn.ModuleList(
             [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
 
+    def gaussian_filter(self, x, kernel_size, sigma):
+        """
+        Apply a 1D Gaussian filter to smooth the input tensor.
+
+        Args:
+            x: Input tensor of shape [Batch, Variate, Time].
+            kernel_size: Size of the Gaussian kernel.
+            sigma: Standard deviation of the Gaussian kernel.
+
+        Returns:
+            Smoothed tensor of the same shape as input.
+        """
+        # Create Gaussian kernel
+        gauss_kernel = torch.tensor([
+            math.exp(-((t - (kernel_size - 1) / 2) ** 2) / (2 * sigma ** 2))
+            for t in range(kernel_size)
+        ], device=x.device)
+
+        # Normalize the kernel so that the sum of the elements is 1
+        gauss_kernel /= gauss_kernel.sum()
+
+        # Reshape the kernel for use in 1D convolution
+        gauss_kernel = gauss_kernel.view(1, 1, -1)
+
+        # Apply the Gaussian filter to each variate independently using 1D convolution
+        x = x.view(x.size(0) * x.size(1), 1, x.size(2))  # Reshape to [Batch*Variate, 1, Time]
+        x_smooth = F.conv1d(x, gauss_kernel, padding=(kernel_size // 2))  # Apply the filter
+
+        # Reshape back to original shape [Batch, Variate, Time]
+        x_smooth = x_smooth.view(-1, x.size(1), x.size(2))
+
+        return x_smooth
+
     def forecast(self, x_enc):
         # Normalization from Non-stationary Transformer
         if self.use_norm:
@@ -309,7 +342,7 @@ class HSOFTS(BaseMultivariate):
             )
             x_enc /= stdev
 
-            #x_enc = self.gaussian_filter(x_enc, 3, 1.75)  # (smooth_left_copy + smooth_right_copy) / 2
+            x_enc = self.gaussian_filter(x_enc, 3, 1.75)  # (smooth_left_copy + smooth_right_copy) / 2
 
         _, _, N = x_enc.shape
         enc_out = self.enc_embedding(x_enc)
@@ -375,7 +408,7 @@ class HSOFTS(BaseMultivariate):
         return data
 
 
-    def gaussian_filter(self, data, kernel_size=5, sigma=1.0):
+    def gaussian_filte2r(self, data, kernel_size=5, sigma=1.0):
         # Create a 1D Gaussian kernel
         kernel = torch.arange(kernel_size, device=data.device) - (kernel_size - 1) / 2
         kernel = torch.exp(-0.5 * (kernel / sigma) ** 2)
