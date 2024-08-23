@@ -286,7 +286,7 @@ class HSOFTS(BaseMultivariate):
             [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)]
         )
 
-    def gaussian_filter(self, input_tensor, kernel_size, sigma):
+    def gaussian_filter4(self, input_tensor, kernel_size, sigma):
         """
         Apply a Gaussian filter to smooth the input_tensor.
         """
@@ -357,7 +357,7 @@ class HSOFTS(BaseMultivariate):
         return dec_out
         '''
 
-    def gaussian_filter3(self, input_tensor, kernel_size, sigma):
+    def gaussian_filter(self, input_tensor, kernel_size, sigma):
         """
         Apply a Gaussian filter to smooth the input_tensor.
 
