@@ -282,11 +282,10 @@ class HSOFTS(BaseMultivariate):
                 for l in range(e_layers)
             ]
         )
-        #self.encoder = nn.Linear(self.hidden_size, self.hidden_size)
-        self.encoder = KAN(h=self.hidden_size, input_size= h, loss=MAE(), max_steps=1000, val_check_steps=500)
+        self.encoder = nn.Linear(self.hidden_size, self.hidden_size)
+        #self.encoder = KAN(h=self.hidden_size, input_size= h, loss=MAE(), max_steps=1000, val_check_steps=500)
 
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
-
 
         # Define a list of projectors, one for each segment
         self.projectors = nn.ModuleList([nn.Linear(self.hidden_size, h, bias=True) for _ in range(self.projectors_num)])
@@ -308,7 +307,7 @@ class HSOFTS(BaseMultivariate):
             )
             x_enc /= stdev
 
-            x_enc = self.normalize_frequencies(x_enc, 0.75)  # (smooth_left_copy + smooth_right_copy) / 2
+            #x_enc = self.normalize_frequencies(x_enc, 0.75)  # (smooth_left_copy + smooth_right_copy) / 2
 
         _, _, N = x_enc.shape
         enc_out = self.enc_embedding(x_enc)
