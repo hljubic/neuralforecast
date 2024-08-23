@@ -11,27 +11,52 @@ import torch.nn.functional as F
 from ..losses.pytorch import MAE
 from ..common._base_multivariate import BaseMultivariate
 from ..common._modules import TransEncoder, TransEncoderLayer
+import torch
+import torch.nn as nn
+import math
 
-# %% ../../nbs/models.hsofts.ipynb 6
+
 class DataEmbedding_inverted(nn.Module):
     """
-    Data Embedding
+    Data Embedding with Positional Encoding (Sinusoidal)
     """
 
-    def __init__(self, c_in, d_model, dropout=0.1):
+    def __init__(self, c_in, d_model, dropout=0.1, max_len=5000):
         super(DataEmbedding_inverted, self).__init__()
         self.value_embedding = nn.Linear(c_in, d_model)
         self.dropout = nn.Dropout(p=dropout)
 
-    def forward(self, x, x_mark):
-        x = x.permute(0, 2, 1)
-        # x: [Batch Variate Time]
+        # Create the positional encoding matrix
+        self.positional_encoding = self.create_positional_encoding(d_model, max_len)
+
+    def create_positional_encoding(self, d_model, max_len):
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0).transpose(0, 1)  # Shape: [max_len, 1, d_model]
+        return pe
+
+    def forward(self, x, x_mark=None):
+        x = x.permute(0, 2, 1)  # x: [Batch, Variate, Time]
+
+        # Apply value embedding
         if x_mark is None:
             x = self.value_embedding(x)
         else:
-            # the potential to take covariates (e.g. timestamps) as tokens
+            # Concatenate x and x_mark along the time dimension
             x = self.value_embedding(torch.cat([x, x_mark.permute(0, 2, 1)], 1))
-        # x: [Batch Variate d_model]
+
+        # Apply positional encoding (ensure sequence length matches)
+        seq_len = x.size(2)
+        if seq_len <= self.positional_encoding.size(0):
+            pos_enc = self.positional_encoding[:seq_len, :, :]
+        else:
+            pos_enc = self.create_positional_encoding(x.size(1), seq_len)
+
+        x = x + pos_enc.permute(1, 2, 0)  # Adding positional encoding to the input embeddings
+
         return self.dropout(x)
 
 # %% ../../nbs/models.hsofts.ipynb 8
