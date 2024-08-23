@@ -370,15 +370,18 @@ class HPatchTST_backbone(nn.Module):
             z = self.revin_layer(z, "norm")
             z = z.permute(0, 2, 1)
 
+        print("xx1")
         # Smoothed data (e.g., Gaussian filter)
         smoothed_x_enc = self.gaussian_filter(z, kernel_size=3, sigma=2.75)
 
         residual_x_enc = z - smoothed_x_enc
 
+        print("xx2")
         # Save min and max values before smoothing residuals
         min_vals_residual = residual_x_enc.min(dim=1, keepdim=True)[0]
         max_vals_residual = residual_x_enc.max(dim=1, keepdim=True)[0]
 
+        print("xx3")
         # Apply Gaussian filter to residuals
         residual_x_enc = self.gaussian_filter(residual_x_enc, kernel_size=3, sigma=1.75)
 
@@ -388,10 +391,12 @@ class HPatchTST_backbone(nn.Module):
                              0] + 1e-5) * \
                          (max_vals_residual - min_vals_residual) + min_vals_residual
 
+        print("xx4")
         # Encoding with separate layers
         enc_smooth_out = self.encoder_smooth(self.enc_embedding(smoothed_x_enc))
         enc_residual_out = self.encoder_residual(self.enc_embedding(residual_x_enc))
 
+        print("xx5")
         # Summing the outputs of both encoders
         z = enc_smooth_out + enc_residual_out
 
@@ -403,6 +408,7 @@ class HPatchTST_backbone(nn.Module):
         )  # z: [bs x nvars x patch_num x patch_len]
         z = z.permute(0, 1, 3, 2)  # z: [bs x nvars x patch_len x patch_num]
 
+        print("xx6")
         # model
         z = self.backbone(z)  # z: [bs x nvars x hidden_size x patch_num]
         z = self.head(z)  # z: [bs x nvars x h]
