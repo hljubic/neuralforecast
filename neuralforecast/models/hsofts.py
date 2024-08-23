@@ -78,10 +78,10 @@ class DataEmbedding_inverted(nn.Module):
         x = self.position_encoding(x)
 
         # Calculate slope embedding for each time point
-        #slope_embedding = self.calculate_slope_embedding(x)
+        slope_embedding = self.calculate_slope_embedding(x)
 
         # Combine the original embedding with the slope embedding
-        combined_embedding = x# + slope_embedding
+        combined_embedding = x + slope_embedding
 
         return self.dropout(self.layer_norm(combined_embedding))
 
@@ -277,7 +277,7 @@ class HSOFTS(BaseMultivariate):
         self.encoder_residual = nn.Linear(hidden_size, hidden_size)
 
         # Projectors for each segment
-        self.projectors = nn.ModuleList([nn.Linear(hidden_size, h // 2, bias=True) for _ in range(self.projectors_num * 2)])
+        self.projectors = nn.ModuleList([nn.Linear(hidden_size, h, bias=True) for _ in range(self.projectors_num)])
 
         # Final Linear layer
         self.final = nn.Linear(h * self.projectors_num, h, bias=True)
@@ -313,10 +313,10 @@ class HSOFTS(BaseMultivariate):
 
         # Encoding with separate layers
         enc_smooth_out = self.encoder_smooth(self.enc_embedding(smoothed_x_enc))
-        enc_residual_out = self.encoder_residual(self.enc_embedding(x_enc))
+        enc_residual_out = self.encoder_residual(self.enc_embedding(residual_x_enc))
 
         # Summing the outputs of both encoders
-        enc_out = enc_residual_out
+        enc_out = enc_smooth_out + enc_residual_out
 
         # Generating predictions from each segment using the projectors
         dec_outs = []
