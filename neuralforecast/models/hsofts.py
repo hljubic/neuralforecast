@@ -260,6 +260,14 @@ class HSOFTS(BaseMultivariate):
             **trainer_kwargs
         )
 
+        self.h = h
+        self.enc_in = n_series
+        self.dec_in = n_series
+        self.c_out = n_series
+        self.use_norm = use_norm
+        self.hidden_size = hidden_size
+        self.projectors_num = 4
+
         # Architecture: Data Embedding
         self.enc_embedding = DataEmbedding_inverted(n_series, hidden_size)
 
