@@ -313,10 +313,10 @@ class HSOFTS(BaseMultivariate):
 
         # Encoding with separate layers
         enc_smooth_out = self.encoder_smooth(self.enc_embedding(smoothed_x_enc))
-        enc_residual_out = self.encoder_residual(self.enc_embedding(residual_x_enc))
+        enc_residual_out = self.encoder_residual(self.enc_embedding(x_enc))
 
         # Summing the outputs of both encoders
-        enc_out = enc_smooth_out + enc_residual_out
+        enc_out = enc_residual_out
 
         # Generating predictions from each segment using the projectors
         dec_outs = []
