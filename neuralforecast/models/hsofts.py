@@ -337,12 +337,12 @@ class HSOFTS(BaseMultivariate):
         enc_residual_out = self.encoder_residual(self.enc_embedding(residual_x_enc))
 
         # Summing the outputs of both encoders
-        enc_out = enc_smooth_out + enc_residual_out
+        enc_out = enc_smooth_out# + enc_residual_out
 
 
-        _, _, N = x_enc.shape
-        enc_out = self.enc_embedding(x_enc)
-        enc_out = self.encoder(enc_out)#, attn_mask=None)
+        #_, _, N = x_enc.shape
+        #enc_out = self.enc_embedding(x_enc)
+        #enc_out = self.encoder(enc_out)#, attn_mask=None)
 
         # Generating predictions from each segment using the projectors
         dec_outs = []
