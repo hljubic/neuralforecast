@@ -40,7 +40,7 @@ class PositionalEncoding(nn.Module):
         return x
 
 
-class DataEmbedding_inverted4(nn.Module):
+class DataEmbedding_inverted(nn.Module):
     """
     Data Embedding with Positional Encoding and slope calculations.
     """
@@ -79,13 +79,13 @@ class DataEmbedding_inverted4(nn.Module):
         slope_embedding = self.calculate_slope_embedding(x)
 
         # Combine the original embedding with the slope embedding
-        combined_embedding = x + slope_embedding
+        combined_embedding = slope_embedding
 
         return self.dropout(combined_embedding)
 
 
 # %% ../../nbs/models.hsofts.ipynb 6
-class DataEmbedding_inverted(nn.Module):
+class DataEmbedding_inverted_orig(nn.Module):
     """
     Data Embedding
     """
