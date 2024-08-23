@@ -289,7 +289,7 @@ class HSOFTS(BaseMultivariate):
 
 
         # Add LSTM layer
-        self.lstm = nn.LSTM(input_size=hidden_size, hidden_size=hidden_size, num_layers=1, batch_first=True)
+        self.lstm = nn.LSTM(input_size=h, hidden_size=h, num_layers=1, batch_first=True)
 
         # Projection layer
         self.projection = nn.Linear(hidden_size, h, bias=True)
@@ -337,7 +337,7 @@ class HSOFTS(BaseMultivariate):
         enc_out = enc_smooth_out + enc_residual_out
         _, _, N = x_enc.shape
 
-        '''
+
         # Generating predictions from each segment using the projectors
         dec_outs = []
         for i, projector in enumerate(self.projectors):
@@ -353,10 +353,10 @@ class HSOFTS(BaseMultivariate):
             final_outs.append(projector(dec_out).permute(0, 2, 1))
 
         dec_out = torch.cat(final_outs, dim=1)
-        '''
+
 
         # Pass through LSTM
-        lstm_out, _ = self.lstm(enc_out)
+        lstm_out, _ = self.lstm(dec_out)
 
         # Apply projection on LSTM output
         dec_out = self.projection(lstm_out).permute(0, 2, 1)[:, :, :N]
