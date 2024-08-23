@@ -261,7 +261,7 @@ class HSOFTS(BaseMultivariate):
             x_enc = self.normalize_frequencies(x_enc, 0.75)  # (smooth_left_copy + smooth_right_copy) / 2
 
         _, _, N = x_enc.shape
-        enc_out = self.enc_embedding(x_enc, None)
+        enc_out = self.enc_embedding(x_enc)
         enc_out = self.encoder(enc_out)#, attn_mask=None)
 
         # Generate predictions from each segment using corresponding projectors
