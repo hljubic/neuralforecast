@@ -298,6 +298,7 @@ class HSOFTS(BaseMultivariate):
 
         # Smoothed data (e.g., Gaussian filter)
 
+        self.learnable_sigma = self.learnable_sigma.to(x_enc.device)
 
 
         #smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=2.75)
@@ -368,6 +369,8 @@ class HSOFTS(BaseMultivariate):
         Returns:
             torch.Tensor: The smoothed tensor.
         """
+        sigma = sigma.to(input_tensor.device)
+
         # Create a 1D Gaussian kernel
         kernel = torch.arange(kernel_size, dtype=torch.float32) - (kernel_size - 1) / 2.0
         kernel = torch.exp(-0.5 * (kernel / sigma) ** 2)
