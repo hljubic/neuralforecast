@@ -351,7 +351,7 @@ class HSOFTS(BaseMultivariate):
             final_outs.append(projector(dec_out).permute(0, 2, 1))
         '''
 
-        dec_out = torch.cat(dec_outs, dim=1)
+        dec_out = torch.cat(dec_outs, dim=2)
 
         # Reapply normalization
         if self.use_norm:
