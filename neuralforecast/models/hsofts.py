@@ -277,7 +277,7 @@ class HSOFTS(BaseMultivariate):
         self.encoder_residual = nn.Linear(hidden_size, hidden_size)
         # Projectors for each segment
         self.projectors = nn.ModuleList([nn.Linear(hidden_size, h, bias=True) for _ in range(self.projectors_num)])
-        self.self_attention = nn.MultiheadAttention(embed_dim=self.h * self.projectors_num, num_heads=8)
+        self.self_attention = nn.MultiheadAttention(embed_dim=self.h, num_heads=8)
 
         # Final Linear layer
         self.final = nn.Linear(h * self.projectors_num, h, bias=True)
