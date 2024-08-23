@@ -316,6 +316,8 @@ class HSOFTS(BaseMultivariate):
         # Smoothed data (e.g., Gaussian filter)
         smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=4.75)
 
+        residual_x_enc = x_enc - smoothed_x_enc
+
         # Save min and max values before smoothing residuals
         min_vals_residual = residual_x_enc.min(dim=1, keepdim=True)[0]
         max_vals_residual = residual_x_enc.max(dim=1, keepdim=True)[0]
