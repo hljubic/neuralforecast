@@ -276,10 +276,6 @@ class HSOFTS(BaseMultivariate):
         self.encoder_smooth = nn.Linear(hidden_size, hidden_size)
         self.encoder_residual = nn.Linear(hidden_size, hidden_size)
 
-        # Two separate encoders: one for low-frequency and one for high-frequency components
-        self.encoder_low_freq = nn.Linear(hidden_size, hidden_size)
-        self.encoder_high_freq = nn.Linear(hidden_size, hidden_size)
-
         # Projectors for each segment
         self.projectors = nn.ModuleList([nn.Linear(hidden_size, h, bias=True) for _ in range(self.projectors_num)])
 
@@ -310,24 +306,6 @@ class HSOFTS(BaseMultivariate):
 
         return smoothed_tensor
 
-    def low_pass_filter(self, input_tensor, kernel_size, sigma):
-        """
-        Apply a low-pass (smoothing) filter to extract low-frequency components.
-        """
-        kernel = torch.arange(kernel_size, dtype=torch.float32) - (kernel_size - 1) / 2.0
-        kernel = torch.exp(-0.5 * (kernel / sigma) ** 2)
-        kernel = kernel / kernel.sum()  # Normalize
-        kernel = kernel.view(1, 1, -1).to(input_tensor.device)
-
-        smoothed_tensor = []
-        num_features = input_tensor.size(2)
-        for i in range(num_features):
-            feature_tensor = input_tensor[:, :, i].unsqueeze(1)  # [batch_size, 1, seq_len]
-            smoothed_feature = F.conv1d(feature_tensor, kernel, padding=(kernel_size - 1) // 2)
-            smoothed_tensor.append(smoothed_feature)
-        smoothed_tensor = torch.cat(smoothed_tensor, dim=1).permute(0, 2, 1)
-
-        return smoothed_tensor
     def forecast(self, x_enc):
         # Normalization
         if self.use_norm:
@@ -335,18 +313,28 @@ class HSOFTS(BaseMultivariate):
             stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5).detach()
             x_enc = (x_enc - means) / stdev
 
-        # Low-frequency component (e.g., smoothed version)
-        low_freq_x_enc = self.low_pass_filter(x_enc, kernel_size=3, sigma=1.75)
+        # Smoothed data (e.g., Gaussian filter)
+        smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=4.75)
 
-        # High-frequency component (residuals or differences)
-        high_freq_x_enc = x_enc - low_freq_x_enc
+        # Save min and max values before smoothing residuals
+        min_vals_residual = residual_x_enc.min(dim=1, keepdim=True)[0]
+        max_vals_residual = residual_x_enc.max(dim=1, keepdim=True)[0]
+
+        # Apply Gaussian filter to residuals
+        residual_x_enc = self.gaussian_filter(residual_x_enc, kernel_size=3, sigma=1.75)
+
+        # Rescale residuals back to the original min-max range
+        residual_x_enc = (residual_x_enc - residual_x_enc.min(dim=1, keepdim=True)[0]) / \
+                         (residual_x_enc.max(dim=1, keepdim=True)[0] - residual_x_enc.min(dim=1, keepdim=True)[
+                             0] + 1e-5) * \
+                         (max_vals_residual - min_vals_residual) + min_vals_residual
 
         # Encoding with separate layers
-        enc_low_freq_out = self.encoder_low_freq(self.enc_embedding(low_freq_x_enc))
-        enc_high_freq_out = self.encoder_high_freq(self.enc_embedding(high_freq_x_enc))
+        enc_smooth_out = self.encoder_smooth(self.enc_embedding(smoothed_x_enc))
+        enc_residual_out = self.encoder_residual(self.enc_embedding(residual_x_enc))
 
         # Summing the outputs of both encoders
-        enc_out = enc_low_freq_out + enc_high_freq_out
+        enc_out = enc_smooth_out + enc_residual_out
 
         # Generating predictions from each segment using the projectors
         dec_outs = []
@@ -379,6 +367,14 @@ class HSOFTS(BaseMultivariate):
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
         return dec_out
         '''
+
+    def min_max_rescale(self, original, transformed, min_vals, max_vals):
+        """
+        Rescale transformed data to the original min-max range.
+        """
+        return (transformed - transformed.min(dim=1, keepdim=True)[0]) / \
+               (transformed.max(dim=1, keepdim=True)[0] - transformed.min(dim=1, keepdim=True)[0] + 1e-5) * \
+               (max_vals - min_vals) + min_vals
 
     def gaussian_filter(self, input_tensor, kernel_size, sigma):
         """
