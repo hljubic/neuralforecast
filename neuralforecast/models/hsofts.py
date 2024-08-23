@@ -244,7 +244,7 @@ class HSOFTS(BaseMultivariate):
         self.projectors_num = 4
 
         # Architecture
-        self.enc_embedding = DataEmbedding_inverted(input_size, hidden_size)
+        self.enc_embedding = PositionalEncoding(input_size, hidden_size)
 
         self.encoder2 = TransEncoder(
             [
