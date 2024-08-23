@@ -322,11 +322,12 @@ class HSOFTS(BaseMultivariate):
         residual_x_enc = self.normalize_frequencies(residual_x_enc, 0.5)
 
         # Encoding with separate layers
-        enc_smooth_out = self.encoder_smooth(self.enc_embedding(smoothed_x_enc))
-        enc_residual_out = self.encoder_residual(self.enc_embedding(residual_x_enc))
+        enc_smooth_out = self.encoder_smooth(smoothed_x_enc)
+        enc_residual_out = self.encoder_residual(residual_x_enc)
 
         # Summing the outputs of both encoders
-        enc_out = enc_smooth_out + enc_residual_out
+        enc_out = smoothed_x_enc + residual_x_enc
+        enc_out = self.encoder_residual(self.enc_embedding(enc_out))
 
         # Generating predictions from each segment using the projectors
         dec_outs = []
