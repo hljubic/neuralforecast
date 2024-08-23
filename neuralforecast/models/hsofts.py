@@ -343,7 +343,7 @@ class HSOFTS(BaseMultivariate):
         # Additional projectors after the final
         final_outs = []
         for projector in self.additional_projectors:
-            final_outs.append(projector(dec_out).permute(0, 2, 1))
+            final_outs.append(projector(dec_out))
 
         dec_out = torch.cat(final_outs, dim=1)
 
@@ -356,7 +356,7 @@ class HSOFTS(BaseMultivariate):
         dec_out, _ = self.rnn(dec_out)
 
         # Output layer after RNN
-        dec_out = self.rnn_output(dec_out)
+        dec_out = self.rnn_output(dec_out).permute(0, 2, 1)
 
         return dec_out
 
