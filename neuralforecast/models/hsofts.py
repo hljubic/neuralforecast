@@ -299,39 +299,6 @@ class HSOFTS(BaseMultivariate):
         self.additional_projectors = nn.ModuleList(
             [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
 
-    def gaussian_filter(self, x, kernel_size, sigma):
-        """
-        Apply a 1D Gaussian filter to smooth the input tensor.
-
-        Args:
-            x: Input tensor of shape [Batch, Variate, Time].
-            kernel_size: Size of the Gaussian kernel.
-            sigma: Standard deviation of the Gaussian kernel.
-
-        Returns:
-            Smoothed tensor of the same shape as input.
-        """
-        # Create Gaussian kernel
-        gauss_kernel = torch.tensor([
-            math.exp(-((t - (kernel_size - 1) / 2) ** 2) / (2 * sigma ** 2))
-            for t in range(kernel_size)
-        ], device=x.device)
-
-        # Normalize the kernel so that the sum of the elements is 1
-        gauss_kernel /= gauss_kernel.sum()
-
-        # Reshape the kernel for use in 1D convolution
-        gauss_kernel = gauss_kernel.view(1, 1, -1)
-
-        # Apply the Gaussian filter to each variate independently using 1D convolution
-        x = x.view(x.size(0) * x.size(1), 1, x.size(2))  # Reshape to [Batch*Variate, 1, Time]
-        x_smooth = F.conv1d(x, gauss_kernel, padding=(kernel_size // 2))  # Apply the filter
-
-        # Reshape back to original shape [Batch, Variate, Time]
-        x_smooth = x_smooth.view(-1, x.size(1), x.size(2))
-
-        return x_smooth
-
     def forecast(self, x_enc):
         # Normalization from Non-stationary Transformer
         if self.use_norm:
@@ -381,6 +348,35 @@ class HSOFTS(BaseMultivariate):
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
         return dec_out
         '''
+
+    def gaussian_filter(self, input_tensor, kernel_size, sigma):
+        """
+        Apply a Gaussian filter to smooth the input_tensor.
+
+        Args:
+            input_tensor (torch.Tensor): The input tensor to be smoothed (batch_size, seq_len, num_features).
+            kernel_size (int): The size of the Gaussian kernel.
+            sigma (float): The standard deviation of the Gaussian distribution.
+
+        Returns:
+            torch.Tensor: The smoothed tensor.
+        """
+        # Create a 1D Gaussian kernel
+        kernel = torch.arange(kernel_size, dtype=torch.float32) - (kernel_size - 1) / 2.0
+        kernel = torch.exp(-0.5 * (kernel / sigma) ** 2)
+        kernel = kernel / kernel.sum()  # Normalize the kernel to ensure sum is 1
+
+        # Expand dimensions to apply along the sequence (input_tensor: [batch, seq_len, features])
+        kernel = kernel.to(input_tensor.device).view(1, 1, -1)
+
+        # Apply Gaussian filter for each feature across the sequence dimension
+        smoothed_tensor = F.conv1d(input_tensor.permute(0, 2, 1), kernel, padding=(kernel_size - 1) // 2,
+                                   groups=input_tensor.size(2))
+
+        # Permute back to the original shape: [batch_size, seq_len, num_features]
+        smoothed_tensor = smoothed_tensor.permute(0, 2, 1)
+
+        return smoothed_tensor
 
     def estimate_frequency(self, data):
         # Estimate frequency using FFT (Fast Fourier Transform)
