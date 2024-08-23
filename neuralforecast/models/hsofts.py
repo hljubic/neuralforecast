@@ -11,10 +11,11 @@ import torch.nn.functional as F
 from ..losses.pytorch import MAE
 from ..common._base_multivariate import BaseMultivariate
 from ..common._modules import TransEncoder, TransEncoderLayer
+
+
 import torch
 import torch.nn as nn
 import math
-
 
 class DataEmbedding_inverted(nn.Module):
     """
@@ -35,29 +36,27 @@ class DataEmbedding_inverted(nn.Module):
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)  # Shape: [max_len, 1, d_model]
+        pe = pe.unsqueeze(0)  # Shape: [1, max_len, d_model]
         return pe
 
     def forward(self, x, x_mark=None):
-        x = x.permute(0, 2, 1)  # x: [Batch, Variate, Time]
+        # x: [Batch, Variate, Time]
+        batch_size, variate_size, seq_len = x.size()
 
         # Apply value embedding
         if x_mark is None:
-            x = self.value_embedding(x)
+            x = self.value_embedding(x.permute(0, 2, 1))  # [Batch, Time, d_model]
         else:
-            # Concatenate x and x_mark along the time dimension
-            x = self.value_embedding(torch.cat([x, x_mark.permute(0, 2, 1)], 1))
+            x = self.value_embedding(torch.cat([x.permute(0, 2, 1), x_mark.permute(0, 2, 1)], -1))  # [Batch, Time, d_model]
 
         # Apply positional encoding (ensure sequence length matches)
-        seq_len = x.size(2)
-        if seq_len <= self.positional_encoding.size(0):
-            pos_enc = self.positional_encoding[:seq_len, :, :]
-        else:
-            pos_enc = self.create_positional_encoding(x.size(1), seq_len)
+        pos_enc = self.positional_encoding[:, :seq_len, :].to(x.device)  # [1, seq_len, d_model]
 
-        x = x + pos_enc.permute(1, 2, 0)  # Adding positional encoding to the input embeddings
+        # Add positional encoding to the input embeddings
+        x = x + pos_enc
 
-        return self.dropout(x)
+        return self.dropout(x).permute(0, 2, 1)  # Return to [Batch, Variate, d_model]
+
 
 # %% ../../nbs/models.hsofts.ipynb 8
 class STAD(nn.Module):
