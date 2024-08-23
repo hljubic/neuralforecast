@@ -340,6 +340,8 @@ class HSOFTS(BaseMultivariate):
         # Summing the outputs of both encoders
         enc_out = enc_smooth_out + enc_residual_out
 
+        return enc_out
+        '''
         enc_out = self.bridge1(enc_out)
         enc_out = self.bridge2(enc_out)
 
@@ -365,6 +367,7 @@ class HSOFTS(BaseMultivariate):
             dec_out = dec_out + means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
 
         return dec_out
+        '''
         '''
         dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
 
