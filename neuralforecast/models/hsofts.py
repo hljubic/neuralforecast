@@ -81,6 +81,13 @@ class DataEmbedding_inverted(nn.Module):
         # Combine the original embedding with the slope embedding
         combined_embedding = slope_embedding
 
+        means = combined_embedding.mean(1, keepdim=True).detach()
+        combined_embedding = combined_embedding - means
+        stdev = torch.sqrt(
+            torch.var(combined_embedding, dim=1, keepdim=True, unbiased=False) + 1e-5
+        )
+        combined_embedding /= stdev
+
         return self.dropout(combined_embedding)
 
 
