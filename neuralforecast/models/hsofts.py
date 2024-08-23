@@ -260,85 +260,85 @@ class HSOFTS(BaseMultivariate):
             **trainer_kwargs
         )
 
-        self.h = h
-        self.enc_in = n_series
-        self.dec_in = n_series
-        self.c_out = n_series
-        self.use_norm = use_norm
+        # Architecture: Data Embedding
+        self.enc_embedding = DataEmbedding_inverted(n_series, hidden_size)
 
-        self.hidden_size = hidden_size
-        self.projectors_num = 4
+        # Two separate encoders: one for smoothed data and one for residuals
+        self.encoder_smooth = nn.Linear(hidden_size, hidden_size)
+        self.encoder_residual = nn.Linear(hidden_size, hidden_size)
 
-        # Architecture
-        self.enc_embedding = DataEmbedding_inverted(input_size, hidden_size)
-
-        self.encoder2 = TransEncoder(
-            [
-                TransEncoderLayer(
-                    STAD(hidden_size, d_core),
-                    hidden_size,
-                    d_ff,
-                    dropout=dropout,
-                    activation=F.gelu,
-                )
-                for l in range(e_layers)
-            ]
-        )
-        self.encoder = nn.Linear(self.hidden_size, self.hidden_size)
-        #self.encoder = KAN(h=self.hidden_size, input_size= h, loss=MAE(), max_steps=1000, val_check_steps=500)
-
-        self.projection = nn.Linear(hidden_size, self.h, bias=True)
-
-        # Define a list of projectors, one for each segment
-        self.projectors = nn.ModuleList([nn.Linear(self.hidden_size, h, bias=True) for _ in range(self.projectors_num)])
+        # Projectors for each segment
+        self.projectors = nn.ModuleList([nn.Linear(hidden_size, h, bias=True) for _ in range(self.projectors_num)])
 
         # Final Linear layer
         self.final = nn.Linear(h * self.projectors_num, h, bias=True)
 
-        # Define additional projectors after final
+        # Additional projectors after final
         self.additional_projectors = nn.ModuleList(
-            [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
+            [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)]
+        )
+
+    def gaussian_filter(self, input_tensor, kernel_size, sigma):
+        """
+        Apply a Gaussian filter to smooth the input_tensor.
+        """
+        kernel = torch.arange(kernel_size, dtype=torch.float32) - (kernel_size - 1) / 2.0
+        kernel = torch.exp(-0.5 * (kernel / sigma) ** 2)
+        kernel = kernel / kernel.sum()  # Normalize
+        kernel = kernel.view(1, 1, -1).to(input_tensor.device)
+
+        smoothed_tensor = []
+        num_features = input_tensor.size(2)
+        for i in range(num_features):
+            feature_tensor = input_tensor[:, :, i].unsqueeze(1)  # [batch_size, 1, seq_len]
+            smoothed_feature = F.conv1d(feature_tensor, kernel, padding=(kernel_size - 1) // 2)
+            smoothed_tensor.append(smoothed_feature)
+        smoothed_tensor = torch.cat(smoothed_tensor, dim=1).permute(0, 2, 1)
+
+        return smoothed_tensor
 
     def forecast(self, x_enc):
-        # Normalization from Non-stationary Transformer
+        # Normalization
         if self.use_norm:
             means = x_enc.mean(1, keepdim=True).detach()
-            x_enc = x_enc - means
-            stdev = torch.sqrt(
-                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            x_enc /= stdev
+            stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5).detach()
+            x_enc = (x_enc - means) / stdev
 
-            x_enc = self.normalize_frequencies(x_enc, 0.25)  # (smooth_left_copy + smooth_right_copy) / 2
+        # Smoothed data (e.g., Gaussian filter)
+        smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=1.75)
 
-        _, _, N = x_enc.shape
-        enc_out = self.enc_embedding(x_enc)
-        enc_out = self.encoder(enc_out)#, attn_mask=None)
+        # Residuals (differences from smoothed data)
+        residual_x_enc = x_enc - smoothed_x_enc
 
-        # Generate predictions from each segment using corresponding projectors
+        # Encoding with separate layers
+        enc_smooth_out = self.encoder_smooth(self.enc_embedding(smoothed_x_enc))
+        enc_residual_out = self.encoder_residual(self.enc_embedding(residual_x_enc))
+
+        # Summing the outputs of both encoders
+        enc_out = enc_smooth_out + enc_residual_out
+
+        # Generating predictions from each segment using the projectors
         dec_outs = []
         for i, projector in enumerate(self.projectors):
             dec_outs.append(projector(enc_out))
 
-        # Concatenate the outputs from all projectors
+        # Concatenate outputs and pass through the final layer
         dec_out = torch.cat(dec_outs, dim=2)
-
-        # Pass through the final linear layer
         dec_out = self.final(dec_out)
 
-        # Additional projectors after final
+        # Additional projectors after the final
         final_outs = []
         for projector in self.additional_projectors:
             final_outs.append(projector(dec_out).permute(0, 2, 1))
 
         dec_out = torch.cat(final_outs, dim=1)
 
+        # Reapply normalization
         if self.use_norm:
-            dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-            dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
+            dec_out = dec_out * stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
+            dec_out = dec_out + means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
 
         return dec_out
-
         '''
         dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
 
@@ -349,7 +349,7 @@ class HSOFTS(BaseMultivariate):
         return dec_out
         '''
 
-    def gaussian_filter(self, input_tensor, kernel_size, sigma):
+    def gaussian_filter3(self, input_tensor, kernel_size, sigma):
         """
         Apply a Gaussian filter to smooth the input_tensor.
 
@@ -407,24 +407,6 @@ class HSOFTS(BaseMultivariate):
             data[i, :, :] = self.gaussian_filter(data[i:i + 1, :, :], kernel_size=9, sigma=sigma)
 
         return data
-
-
-    def gaussian_filte2r(self, data, kernel_size=5, sigma=1.0):
-        # Create a 1D Gaussian kernel
-        kernel = torch.arange(kernel_size, device=data.device) - (kernel_size - 1) / 2
-        kernel = torch.exp(-0.5 * (kernel / sigma) ** 2)
-        kernel = kernel / kernel.sum()  # Normalize kernel
-
-        # Reshape kernel for 1D convolution
-        kernel = kernel.view(1, 1, -1)
-
-        # Apply the Gaussian filter along the time dimension (dim=1)
-        result = torch.zeros_like(data)
-        for i in range(data.size(0)):  # Iterate over the batch
-            for j in range(data.size(2)):  # Iterate over the feature dimension
-                result[i, :, j] = F.conv1d(data[i, :, j].unsqueeze(0).unsqueeze(0),
-                                           kernel, padding=kernel_size // 2).squeeze(0).squeeze(0)
-        return result
 
     def forward(self, windows_batch):
         insample_y = windows_batch["insample_y"]
