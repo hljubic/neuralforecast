@@ -275,6 +275,7 @@ class HSOFTS(BaseMultivariate):
         # Two separate encoders: one for smoothed data and one for residuals
         self.encoder_smooth = nn.Linear(hidden_size, hidden_size)
         self.encoder_residual = nn.Linear(hidden_size, hidden_size)
+        self.bridge = nn.Linear(hidden_size, hidden_size)
 
         # Projectors for each segment
         self.projectors = nn.ModuleList([nn.Linear(hidden_size, h, bias=True) for _ in range(self.projectors_num)])
@@ -314,7 +315,7 @@ class HSOFTS(BaseMultivariate):
             x_enc = (x_enc - means) / stdev
 
         # Smoothed data (e.g., Gaussian filter)
-        smoothed_x_enc = self.normalize_frequencies(x_enc, target_frequency=0.4)#kernel_size=3, sigma=4.75)
+        smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=4.75)
 
         residual_x_enc = x_enc - smoothed_x_enc
 
@@ -337,6 +338,8 @@ class HSOFTS(BaseMultivariate):
 
         # Summing the outputs of both encoders
         enc_out = enc_smooth_out + enc_residual_out
+
+        enc_out = self.bridge(enc_out)
 
         # Generating predictions from each segment using the projectors
         dec_outs = []
