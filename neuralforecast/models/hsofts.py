@@ -367,20 +367,19 @@ class HSOFTS(BaseMultivariate):
         kernel = kernel / kernel.sum()  # Normalize the kernel to ensure sum is 1
 
         # Ensure the kernel is expanded for each feature (group)
-        num_features = input_tensor.size(2)
-        kernel = kernel.view(1, 1, -1).repeat(num_features, 1, 1)  # Repeat for each feature
+        kernel = kernel.view(1, 1, -1).to(input_tensor.device)
 
         # Apply Gaussian filter for each feature across the sequence dimension
-        # Reshape input to be [batch_size * num_features, 1, seq_len]
-        input_tensor = input_tensor.permute(0, 2, 1).contiguous()  # [batch_size, num_features, seq_len]
-        input_tensor = input_tensor.view(-1, 1, input_tensor.size(2))  # [batch_size * num_features, 1, seq_len]
+        num_features = input_tensor.size(2)
+        smoothed_tensor = []
+        for i in range(num_features):
+            # Select the i-th feature (sequence length along the dimension 1)
+            feature_tensor = input_tensor[:, :, i].unsqueeze(1)  # [batch_size, 1, seq_len]
+            smoothed_feature = F.conv1d(feature_tensor, kernel, padding=(kernel_size - 1) // 2)
+            smoothed_tensor.append(smoothed_feature)
 
-        # Apply the convolution
-        smoothed_tensor = F.conv1d(input_tensor, kernel, padding=(kernel_size - 1) // 2, groups=num_features)
-
-        # Reshape back to original shape [batch_size, seq_len, num_features]
-        smoothed_tensor = smoothed_tensor.view(-1, num_features, smoothed_tensor.size(2))
-        smoothed_tensor = smoothed_tensor.permute(0, 2, 1).contiguous()  # [batch_size, seq_len, num_features]
+        # Concatenate along the feature dimension (dim=2)
+        smoothed_tensor = torch.cat(smoothed_tensor, dim=1).permute(0, 2, 1)
 
         return smoothed_tensor
 
