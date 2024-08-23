@@ -352,7 +352,7 @@ class HSOFTS(BaseMultivariate):
         attn_out = attn_out.permute(1, 0, 2)  # Back to [batch_size, seq_len, hidden_size]
 
         # Pass through the final linear layer
-        attn_out = self.final(attn_out)
+        dec_out = self.final(attn_out)
 
         # Additional projectors after the final
         final_outs = []
