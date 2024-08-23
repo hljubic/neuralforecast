@@ -12,6 +12,8 @@ from ..losses.pytorch import MAE
 from ..common._base_multivariate import BaseMultivariate
 from ..common._modules import TransEncoder, TransEncoderLayer
 
+from neuralforecast.models.kan import KAN
+
 import math
 
 import math
