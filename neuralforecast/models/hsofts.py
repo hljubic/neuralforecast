@@ -210,6 +210,65 @@ class HSOFTS(BaseMultivariate):
 
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
 
+        # Define a list of projectors, one for each segment
+        self.projectors = nn.ModuleList([nn.Linear(self.hidden_size, h, bias=True) for _ in range(self.projectors_num)])
+
+        # Final Linear layer
+        self.final = nn.Linear(h * self.projectors_num, h, bias=True)
+
+        # Define additional projectors after final
+        self.additional_projectors = nn.ModuleList(
+            [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)])
+
+    def forecast(self, x_enc):
+        # Normalization from Non-stationary Transformer
+        if self.use_norm:
+            means = x_enc.mean(1, keepdim=True).detach()
+            x_enc = x_enc - means
+            stdev = torch.sqrt(
+                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
+            )
+            x_enc /= stdev
+
+            x_enc = self.normalize_frequencies(x_enc, 0.75)  # (smooth_left_copy + smooth_right_copy) / 2
+
+        _, _, N = x_enc.shape
+        enc_out = self.enc_embedding(x_enc, None)
+        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+
+        # Generate predictions from each segment using corresponding projectors
+        dec_outs = []
+        for i, projector in enumerate(self.projectors):
+            dec_outs.append(projector(enc_out))
+
+        # Concatenate the outputs from all projectors
+        dec_out = torch.cat(dec_outs, dim=2)
+
+        # Pass through the final linear layer
+        dec_out = self.final(dec_out)
+
+        # Additional projectors after final
+        final_outs = []
+        for projector in self.additional_projectors:
+            final_outs.append(projector(dec_out).permute(0, 2, 1))
+
+        dec_out = torch.cat(final_outs, dim=1)
+
+        if self.use_norm:
+            dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
+            dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
+
+        return dec_out
+
+        '''
+        dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
+
+        # De-Normalization from Non-stationary Transformer
+        if self.use_norm:
+            dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
+            dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
+        return dec_out
+        '''
 
     def estimate_frequency(self, data):
         # Estimate frequency using FFT (Fast Fourier Transform)
@@ -267,30 +326,6 @@ class HSOFTS(BaseMultivariate):
                 result[i, :, j] = F.conv1d(data[i, :, j].unsqueeze(0).unsqueeze(0),
                                            kernel, padding=kernel_size // 2).squeeze(0).squeeze(0)
         return result
-
-    def forecast(self, x_enc):
-        # Normalization from Non-stationary Transformer
-        if self.use_norm:
-            means = x_enc.mean(1, keepdim=True).detach()
-            x_enc = x_enc - means
-            stdev = torch.sqrt(
-                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5
-            )
-            x_enc /= stdev
-
-            x_enc = self.normalize_frequencies(x_enc, 0.75)#(smooth_left_copy + smooth_right_copy) / 2
-
-
-        _, _, N = x_enc.shape
-        enc_out = self.enc_embedding(x_enc, None)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
-        dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
-
-        # De-Normalization from Non-stationary Transformer
-        if self.use_norm:
-            dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-            dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-        return dec_out
 
     def forward(self, windows_batch):
         insample_y = windows_batch["insample_y"]
