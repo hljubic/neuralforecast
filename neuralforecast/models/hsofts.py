@@ -340,7 +340,7 @@ class HSOFTS(BaseMultivariate):
 
         # Self-Attention applied to the encoded output
         enc_out = enc_out.permute(1, 0, 2)  # Shape for attention [seq_len, batch_size, hidden_size]
-        attn_out, _ = self.self_attention(enc_out, enc_out, enc_out)
+        attn_out, _ = self.self_attention(enc_out, enc_smooth_out, enc_residual_out)
         attn_out = attn_out.permute(1, 0, 2)  # Back to [batch_size, seq_len, hidden_size]
 
         # Generating predictions from each segment using the projectors
