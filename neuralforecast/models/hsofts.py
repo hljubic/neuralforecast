@@ -78,10 +78,10 @@ class DataEmbedding_inverted(nn.Module):
         x = self.position_encoding(x)
 
         # Calculate slope embedding for each time point
-        slope_embedding = self.calculate_slope_embedding(x)
+        #slope_embedding = self.calculate_slope_embedding(x)
 
         # Combine the original embedding with the slope embedding
-        combined_embedding = x + slope_embedding
+        combined_embedding = x# + slope_embedding
 
         return self.dropout(self.layer_norm(combined_embedding))
 
