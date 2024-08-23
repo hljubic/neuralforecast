@@ -276,7 +276,6 @@ class HSOFTS(BaseMultivariate):
         self.encoder_smooth = nn.Linear(hidden_size, hidden_size)
         self.encoder_residual = nn.Linear(hidden_size, hidden_size)
 
-        self.encoder = nn.Linear(self.hidden_size, self.hidden_size)
         # Projectors for each segment
         self.projectors = nn.ModuleList([nn.Linear(hidden_size, h, bias=True) for _ in range(self.projectors_num)])
 
@@ -324,10 +323,10 @@ class HSOFTS(BaseMultivariate):
         max_vals_residual = residual_x_enc.max(dim=1, keepdim=True)[0]
 
         # Apply Gaussian filter to residuals
-        residual_x_enc = self.gaussian_filter(residual_x_enc, kernel_size=3, sigma=20.75)
+        residual_x_enc = self.gaussian_filter(residual_x_enc, kernel_size=3, sigma=1.75)
 
         # Rescale residuals back to the original min-max range
-        residual_x_enc2 = (residual_x_enc - residual_x_enc.min(dim=1, keepdim=True)[0]) / \
+        residual_x_enc = (residual_x_enc - residual_x_enc.min(dim=1, keepdim=True)[0]) / \
                          (residual_x_enc.max(dim=1, keepdim=True)[0] - residual_x_enc.min(dim=1, keepdim=True)[
                              0] + 1e-5) * \
                          (max_vals_residual - min_vals_residual) + min_vals_residual
@@ -337,12 +336,7 @@ class HSOFTS(BaseMultivariate):
         enc_residual_out = self.encoder_residual(self.enc_embedding(residual_x_enc))
 
         # Summing the outputs of both encoders
-        enc_out = enc_residual_out
-
-
-        #_, _, N = x_enc.shape
-        #enc_out = self.enc_embedding(x_enc)
-        #enc_out = self.encoder(enc_out)#, attn_mask=None)
+        enc_out = enc_smooth_out + enc_residual_out
 
         # Generating predictions from each segment using the projectors
         dec_outs = []
