@@ -14,6 +14,10 @@ from ..common._modules import TransEncoder, TransEncoderLayer
 
 import math
 
+import math
+import torch
+import torch.nn as nn
+
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
@@ -36,7 +40,7 @@ class PositionalEncoding(nn.Module):
 
 class DataEmbedding_inverted(nn.Module):
     """
-    Data Embedding with Positional Encoding
+    Data Embedding with Positional Encoding and slope calculations.
     """
 
     def __init__(self, c_in, d_model, dropout=0.1, max_len=5000):
@@ -44,6 +48,18 @@ class DataEmbedding_inverted(nn.Module):
         self.value_embedding = nn.Linear(c_in, d_model)
         self.position_encoding = PositionalEncoding(d_model, max_len)
         self.dropout = nn.Dropout(p=dropout)
+
+    def calculate_slope_embedding(self, x):
+        # x: [Batch, Variate, Time]
+        # For each time step, calculate slope based on previous time steps
+        batch_size, variate_size, time_size = x.size()
+        slopes = torch.zeros(batch_size, variate_size, time_size).to(x.device)
+
+        # Loop through time steps to calculate slope from position 0 to current
+        for t in range(1, time_size):  # Starting from t=1 since t=0 has no previous points
+            slopes[:, :, t] = (x[:, :, t] - x[:, :, 0]) / t  # Calculate slope from point 0 to t
+
+        return slopes
 
     def forward(self, x, x_mark=None):
         x = x.permute(0, 2, 1)
@@ -57,7 +73,13 @@ class DataEmbedding_inverted(nn.Module):
         # Apply positional encoding
         x = self.position_encoding(x)
 
-        return self.dropout(x)
+        # Calculate slope embedding for each time point
+        slope_embedding = self.calculate_slope_embedding(x)
+
+        # Combine the original embedding with the slope embedding
+        combined_embedding = x + slope_embedding
+
+        return self.dropout(combined_embedding)
 
 
 # %% ../../nbs/models.hsofts.ipynb 6
@@ -258,15 +280,7 @@ class HSOFTS(BaseMultivariate):
                 for l in range(e_layers)
             ]
         )
-        self.encoder4 = nn.Linear(self.hidden_size, self.hidden_size)
-        self.encoder =  TransEncoderLayer(
-                    STAD(hidden_size, d_core),
-                    hidden_size,
-                    d_ff,
-                    dropout=dropout,
-                    activation=F.gelu,
-                )
-
+        self.encoder = nn.Linear(self.hidden_size, self.hidden_size)
 
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
 
