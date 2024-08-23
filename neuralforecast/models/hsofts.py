@@ -192,10 +192,13 @@ class HSOFTS(BaseMultivariate):
         self.c_out = n_series
         self.use_norm = use_norm
 
+        self.hidden_size = hidden_size
+        self.projectors_num = 4
+
         # Architecture
         self.enc_embedding = DataEmbedding_inverted(input_size, hidden_size, dropout)
 
-        self.encoder = TransEncoder(
+        self.encoder2 = TransEncoder(
             [
                 TransEncoderLayer(
                     STAD(hidden_size, d_core),
@@ -207,11 +210,10 @@ class HSOFTS(BaseMultivariate):
                 for l in range(e_layers)
             ]
         )
+        self.encoder = nn.Linear(self.hidden_size, self.hidden_size)
 
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
 
-        self.hidden_size = hidden_size
-        self.projectors_num = 4
 
         # Define a list of projectors, one for each segment
         self.projectors = nn.ModuleList([nn.Linear(self.hidden_size, h, bias=True) for _ in range(self.projectors_num)])
