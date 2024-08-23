@@ -282,12 +282,14 @@ class HSOFTS(BaseMultivariate):
         # Final Linear layer
         self.final = nn.Linear(h * self.projectors_num, h, bias=True)
 
-        self.learnable_sigma = nn.Parameter(torch.tensor([2.75]))
+        #self.learnable_sigma = nn.Parameter(torch.tensor([2.75]))
 
         # Additional projectors after final
         self.additional_projectors = nn.ModuleList(
             [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)]
         )
+
+        self.gru = nn.GRU(input_size=h, hidden_size=h, batch_first=True)
 
     def forecast(self, x_enc):
         # Normalization
@@ -298,11 +300,11 @@ class HSOFTS(BaseMultivariate):
 
         # Smoothed data (e.g., Gaussian filter)
 
-        self.learnable_sigma = self.learnable_sigma.to(x_enc.device)
+        #self.learnable_sigma = self.learnable_sigma.to(x_enc.device)
 
 
-        #smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=2.75)
-        smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=self.learnable_sigma)
+        smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=2.75)
+        #smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=self.learnable_sigma)
 
         residual_x_enc = x_enc - smoothed_x_enc
 
@@ -342,6 +344,7 @@ class HSOFTS(BaseMultivariate):
 
         dec_out = torch.cat(final_outs, dim=1)
 
+        dec_out = self.gru(dec_out)
         # Reapply normalization
         if self.use_norm:
             dec_out = dec_out * stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
@@ -369,7 +372,7 @@ class HSOFTS(BaseMultivariate):
         Returns:
             torch.Tensor: The smoothed tensor.
         """
-        sigma = sigma.to(input_tensor.device)
+        #sigma = sigma.to(input_tensor.device)
 
         # Create a 1D Gaussian kernel
         kernel = torch.arange(kernel_size, dtype=torch.float32) - (kernel_size - 1) / 2.0
