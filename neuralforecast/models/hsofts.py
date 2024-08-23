@@ -331,19 +331,9 @@ class HSOFTS(BaseMultivariate):
                              0] + 1e-5) * \
                          (max_vals_residual - min_vals_residual) + min_vals_residual
 
-        # Apply self-attention before encoding
-        smoothed_x_enc = smoothed_x_enc.permute(1, 0, 2)  # Shape [seq_len, batch_size, hidden_size]
-        residual_x_enc = residual_x_enc.permute(1, 0, 2)
-
-        attn_smooth_out, _ = self.self_attention(smoothed_x_enc, smoothed_x_enc, smoothed_x_enc)
-        attn_residual_out, _ = self.self_attention(residual_x_enc, residual_x_enc, residual_x_enc)
-
-        attn_smooth_out = attn_smooth_out.permute(1, 0, 2)
-        attn_residual_out = attn_residual_out.permute(1, 0, 2)
-
         # Encoding with separate layers
-        enc_smooth_out = self.encoder_smooth(self.enc_embedding(attn_smooth_out))
-        enc_residual_out = self.encoder_residual(self.enc_embedding(attn_residual_out))
+        enc_smooth_out = self.encoder_smooth(self.enc_embedding(smoothed_x_enc))
+        enc_residual_out = self.encoder_residual(self.enc_embedding(residual_x_enc))
 
         # Summing the outputs of both encoders
         enc_out = enc_smooth_out + enc_residual_out
@@ -353,9 +343,16 @@ class HSOFTS(BaseMultivariate):
         for i, projector in enumerate(self.projectors):
             dec_outs.append(projector(enc_out))
 
-        # Concatenate outputs and pass through the final layer
+        # Concatenate outputs before final layer
         dec_out = torch.cat(dec_outs, dim=2)
-        dec_out = self.final(dec_out)
+
+        # Apply self-attention after projectors but before the final layer
+        dec_out = dec_out.permute(1, 0, 2)  # Shape for attention [seq_len, batch_size, hidden_size]
+        attn_out, _ = self.self_attention(dec_out, dec_out, dec_out)
+        attn_out = attn_out.permute(1, 0, 2)  # Back to [batch_size, seq_len, hidden_size]
+
+        # Pass through the final linear layer
+        attn_out = self.final(attn_out)
 
         # Additional projectors after the final
         final_outs = []
