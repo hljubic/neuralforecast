@@ -350,13 +350,12 @@ class HSOFTS(BaseMultivariate):
         # Additional projectors after the final
         final_outs = []
         for projector in self.additional_projectors:
-            final_outs.append(projector(dec_out))
+            final_outs.append(projector(dec_out).permute(0, 2, 1))
 
         dec_out = torch.cat(final_outs, dim=1)
 
-
         # Pass through LSTM
-        lstm_out, _ = self.lstm(dec_out.permute(0, 2, 1))
+        lstm_out, _ = self.lstm(dec_out)
 
         # Apply projection on LSTM output
         dec_out = self.projection(lstm_out).permute(0, 2, 1)[:, :, :N]
