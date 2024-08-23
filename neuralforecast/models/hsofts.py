@@ -281,7 +281,7 @@ class HSOFTS(BaseMultivariate):
             ]
         )
         #self.encoder = nn.Linear(self.hidden_size, self.hidden_size)
-        self.encoder = STAD(self.hidden_size, d_core)
+        self.encoder = KAN(h=self.hidden_size, input_size= h, loss=MAE(), max_steps=1000, val_check_steps=500)
 
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
 
