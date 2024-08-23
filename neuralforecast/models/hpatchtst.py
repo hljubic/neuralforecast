@@ -392,8 +392,8 @@ class HPatchTST_backbone(nn.Module):
 
         print("xx4")
         # Encoding with separate layers
-        enc_smooth_out = self.encoder_smooth(self.enc_embedding(smoothed_x_enc).permute(0, 2, 1))
-        enc_residual_out = self.encoder_residual(self.enc_embedding(residual_x_enc).permute(0, 2, 1))
+        enc_smooth_out = self.encoder_smooth(self.enc_embedding(smoothed_x_enc)).permute(0, 2, 1)
+        enc_residual_out = self.encoder_residual(self.enc_embedding(residual_x_enc)).permute(0, 2, 1)
 
         print("xx5")
         # Summing the outputs of both encoders
