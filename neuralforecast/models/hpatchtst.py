@@ -369,7 +369,7 @@ class HPatchTST_backbone(nn.Module):
         # Smoothed data (e.g., Gaussian filter)
         smoothed_x_enc = self.gaussian_filter(z, kernel_size=3, sigma=2.75)
 
-        residual_x_enc = x_enc - smoothed_x_enc
+        residual_x_enc = z - smoothed_x_enc
 
         # Save min and max values before smoothing residuals
         min_vals_residual = residual_x_enc.min(dim=1, keepdim=True)[0]
