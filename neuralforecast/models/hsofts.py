@@ -280,7 +280,8 @@ class HSOFTS(BaseMultivariate):
                 for l in range(e_layers)
             ]
         )
-        self.encoder = nn.Linear(self.hidden_size, self.hidden_size)
+        #self.encoder = nn.Linear(self.hidden_size, self.hidden_size)
+        self.encoder = STAD(self.hidden_size, d_core)
 
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
 
