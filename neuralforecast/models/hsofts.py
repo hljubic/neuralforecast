@@ -309,7 +309,7 @@ class HSOFTS(BaseMultivariate):
             )
             x_enc /= stdev
 
-            x_enc = self.normalize_frequencies(x_enc, 0.75)  # (smooth_left_copy + smooth_right_copy) / 2
+            x_enc = self.gaussian_filter(x_enc, 3, 1.75)  # (smooth_left_copy + smooth_right_copy) / 2
 
         _, _, N = x_enc.shape
         enc_out = self.enc_embedding(x_enc)
@@ -374,20 +374,6 @@ class HSOFTS(BaseMultivariate):
 
         return data
 
-    def normalize_frequencies2(self, data, target_frequency):
-        # Estimate the frequency of each sequence
-        frequencies = self.estimate_frequency(data)
-
-        # Calculate scaling factors based on how far each sequence is from the target frequency
-        scaling_factors = frequencies / target_frequency
-
-        # Apply Gaussian filter with inverse scaling factor (stronger smoothing for higher frequency sequences)
-        length = data.size(1)
-        for i in range(data.size(0)):
-            sigma = 1.0 / scaling_factors[i].item()  # Inverse of scaling factor
-            data[i, :, :] = self.gaussian_filter(data[i:i + 1, :, :], sigma=sigma)
-
-        return data
 
     def gaussian_filter(self, data, kernel_size=5, sigma=1.0):
         # Create a 1D Gaussian kernel
