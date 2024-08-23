@@ -334,25 +334,23 @@ class HSOFTS(BaseMultivariate):
 
         # Summing the outputs of both encoders
         enc_out = enc_smooth_out + enc_residual_out
-
+        dec_out = enc_out
+        '''
         # Generating predictions from each segment using the projectors
         dec_outs = []
         for i, projector in enumerate(self.projectors):
-            dec_outs.append(projector(enc_out).permute(0, 2, 1))
+            dec_outs.append(projector(enc_out))
 
-        '''
         # Concatenate outputs and pass through the final layer
         dec_out = torch.cat(dec_outs, dim=2)
         dec_out = self.final(dec_out)
-
+        '''
         # Additional projectors after the final
         final_outs = []
         for projector in self.additional_projectors:
             final_outs.append(projector(dec_out).permute(0, 2, 1))
-        '''
 
-        dec_out = torch.cat(dec_outs, dim=2)
-        dec_out = self.final(dec_out)
+        dec_out = torch.cat(final_outs, dim=1)
 
         # Reapply normalization
         if self.use_norm:
