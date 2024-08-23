@@ -259,7 +259,13 @@ class HSOFTS(BaseMultivariate):
             ]
         )
         self.encoder4 = nn.Linear(self.hidden_size, self.hidden_size)
-        self.encoder = STAD(self.hidden_size, self.hidden_size)
+        self.encoder =  TransEncoderLayer(
+                    STAD(hidden_size, d_core),
+                    hidden_size,
+                    d_ff,
+                    dropout=dropout,
+                    activation=F.gelu,
+                )
 
 
         self.projection = nn.Linear(hidden_size, self.h, bias=True)
