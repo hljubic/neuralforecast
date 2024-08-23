@@ -315,7 +315,7 @@ class HSOFTS(BaseMultivariate):
             x_enc = (x_enc - means) / stdev
 
         # Smoothed data (e.g., Gaussian filter)
-        smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=4.75)
+        smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=2.75)
 
         residual_x_enc = x_enc - smoothed_x_enc
 
