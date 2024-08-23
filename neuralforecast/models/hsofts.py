@@ -335,6 +335,7 @@ class HSOFTS(BaseMultivariate):
 
         # Summing the outputs of both encoders
         enc_out = enc_smooth_out + enc_residual_out
+        _, _, N = x_enc.shape
 
         '''
         # Generating predictions from each segment using the projectors
