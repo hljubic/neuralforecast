@@ -14,6 +14,7 @@ from ..common._modules import TransEncoder, TransEncoderLayer
 
 import math
 
+
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
         super(PositionalEncoding, self).__init__()
@@ -29,6 +30,7 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
+        # Apply positional encoding to input
         x = x + self.pe[:x.size(0), :]
         return x
 
