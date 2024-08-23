@@ -276,6 +276,10 @@ class HSOFTS(BaseMultivariate):
         self.encoder_smooth = nn.Linear(hidden_size, hidden_size)
         self.encoder_residual = nn.Linear(hidden_size, hidden_size)
 
+        # Two separate encoders: one for low-frequency and one for high-frequency components
+        self.encoder_low_freq = nn.Linear(hidden_size, hidden_size)
+        self.encoder_high_freq = nn.Linear(hidden_size, hidden_size)
+
         # Projectors for each segment
         self.projectors = nn.ModuleList([nn.Linear(hidden_size, h, bias=True) for _ in range(self.projectors_num)])
 
