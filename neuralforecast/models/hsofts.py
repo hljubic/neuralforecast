@@ -275,11 +275,9 @@ class HSOFTS(BaseMultivariate):
         # Two separate encoders: one for smoothed data and one for residuals
         self.encoder_smooth = nn.Linear(hidden_size, hidden_size)
         self.encoder_residual = nn.Linear(hidden_size, hidden_size)
-        self.bridge1 = nn.Linear(hidden_size, 1)
-        self.bridge2 = nn.Linear(1, hidden_size)
-
         # Projectors for each segment
         self.projectors = nn.ModuleList([nn.Linear(hidden_size, h, bias=True) for _ in range(self.projectors_num)])
+        self.self_attention = nn.MultiheadAttention(embed_dim=hidden_size, num_heads=8)
 
         # Final Linear layer
         self.final = nn.Linear(h * self.projectors_num, h, bias=True)
@@ -332,23 +330,23 @@ class HSOFTS(BaseMultivariate):
                          (residual_x_enc.max(dim=1, keepdim=True)[0] - residual_x_enc.min(dim=1, keepdim=True)[
                              0] + 1e-5) * \
                          (max_vals_residual - min_vals_residual) + min_vals_residual
-        # Encoding with separate layers (without applying embedding yet)
-        enc_smooth_out = self.encoder_smooth(smoothed_x_enc)
-        enc_residual_out = self.encoder_residual(residual_x_enc)
+
+        # Encoding with separate layers
+        enc_smooth_out = self.encoder_smooth(self.enc_embedding(smoothed_x_enc))
+        enc_residual_out = self.encoder_residual(self.enc_embedding(residual_x_enc))
 
         # Summing the outputs of both encoders
         enc_out = enc_smooth_out + enc_residual_out
 
-        # Applying embedding after summing the encoders' outputs
-        enc_out = self.enc_embedding(enc_out)
-
-        enc_out = self.bridge1(enc_out)
-        enc_out = self.bridge2(enc_out)
+        # Self-Attention applied to the encoded output
+        enc_out = enc_out.permute(1, 0, 2)  # Shape for attention [seq_len, batch_size, hidden_size]
+        attn_out, _ = self.self_attention(enc_out, enc_out, enc_out)
+        attn_out = attn_out.permute(1, 0, 2)  # Back to [batch_size, seq_len, hidden_size]
 
         # Generating predictions from each segment using the projectors
         dec_outs = []
         for i, projector in enumerate(self.projectors):
-            dec_outs.append(projector(enc_out))
+            dec_outs.append(projector(attn_out))
 
         # Concatenate outputs and pass through the final layer
         dec_out = torch.cat(dec_outs, dim=2)
