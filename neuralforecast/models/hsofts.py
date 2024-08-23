@@ -275,8 +275,8 @@ class HSOFTS(BaseMultivariate):
         # Two separate encoders: one for smoothed data and one for residuals
         self.encoder_smooth = nn.Linear(hidden_size, hidden_size)
         self.encoder_residual = nn.Linear(hidden_size, hidden_size)
-        self.bridge1 = nn.Linear(hidden_size, hidden_size)
-        self.bridge2 = nn.Linear(hidden_size, h)
+        self.bridge1 = nn.Linear(hidden_size, 1)
+        self.bridge2 = nn.Linear(1, hidden_size)
 
         # Projectors for each segment
         self.projectors = nn.ModuleList([nn.Linear(hidden_size, h, bias=True) for _ in range(self.projectors_num)])
@@ -332,18 +332,18 @@ class HSOFTS(BaseMultivariate):
                          (residual_x_enc.max(dim=1, keepdim=True)[0] - residual_x_enc.min(dim=1, keepdim=True)[
                              0] + 1e-5) * \
                          (max_vals_residual - min_vals_residual) + min_vals_residual
-
-        # Encoding with separate layers
-        enc_smooth_out = self.encoder_smooth(self.enc_embedding(smoothed_x_enc))
-        enc_residual_out = self.encoder_residual(self.enc_embedding(residual_x_enc))
+        # Encoding with separate layers (without applying embedding yet)
+        enc_smooth_out = self.encoder_smooth(smoothed_x_enc)
+        enc_residual_out = self.encoder_residual(residual_x_enc)
 
         # Summing the outputs of both encoders
         enc_out = enc_smooth_out + enc_residual_out
 
+        # Applying embedding after summing the encoders' outputs
+        enc_out = self.enc_embedding(enc_out)
+
         enc_out = self.bridge1(enc_out)
         enc_out = self.bridge2(enc_out)
-        return enc_out
-        '''
 
         # Generating predictions from each segment using the projectors
         dec_outs = []
@@ -367,16 +367,6 @@ class HSOFTS(BaseMultivariate):
             dec_out = dec_out + means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
 
         return dec_out
-        '''
-        '''
-        dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
-
-        # De-Normalization from Non-stationary Transformer
-        if self.use_norm:
-            dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-            dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1))
-        return dec_out
-        '''
 
     def min_max_rescale(self, original, transformed, min_vals, max_vals):
         """
