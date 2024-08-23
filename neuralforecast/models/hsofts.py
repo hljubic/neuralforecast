@@ -308,7 +308,7 @@ class HSOFTS(BaseMultivariate):
 
     def forecast(self, x_enc):
         # Normalization
-        if not self.use_norm:
+        if self.use_norm:
             means = x_enc.mean(1, keepdim=True).detach()
             stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5).detach()
             x_enc = (x_enc - means) / stdev
@@ -319,6 +319,7 @@ class HSOFTS(BaseMultivariate):
         # Residuals (differences from smoothed data)
         residual_x_enc = x_enc - smoothed_x_enc
 
+        smoothed_x_enc = self.normalize_frequencies(smoothed_x_enc, 0.5)
         residual_x_enc = self.normalize_frequencies(residual_x_enc, 0.5)
 
         # Encoding with separate layers
@@ -345,7 +346,7 @@ class HSOFTS(BaseMultivariate):
         dec_out = torch.cat(final_outs, dim=1)
 
         # Reapply normalization
-        if not self.use_norm:
+        if self.use_norm:
             dec_out = dec_out * stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
             dec_out = dec_out + means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
 
