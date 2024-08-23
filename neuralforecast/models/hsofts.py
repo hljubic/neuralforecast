@@ -309,7 +309,7 @@ class HSOFTS(BaseMultivariate):
             )
             x_enc /= stdev
 
-            x_enc = self.gaussian_filter(x_enc, 3, 1.75)  # (smooth_left_copy + smooth_right_copy) / 2
+            x_enc = self.normalize_frequencies(x_enc, 0.75)#, 1.75)  # (smooth_left_copy + smooth_right_copy) / 2
 
         _, _, N = x_enc.shape
         enc_out = self.enc_embedding(x_enc)
