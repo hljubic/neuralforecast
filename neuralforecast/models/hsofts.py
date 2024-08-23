@@ -287,15 +287,6 @@ class HSOFTS(BaseMultivariate):
             [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)]
         )
 
-
-        # Add LSTM layer
-        #self.lstm = nn.LSTM(input_size=h, hidden_size=h, num_layers=1, batch_first=True)
-        self.lstm = nn.LSTM(input_size=8, hidden_size=h, num_layers=1, batch_first=True)
-
-        # Projection layer
-        #self.projection = nn.Linear(hidden_size, h, bias=True)
-        self.projection = nn.Linear(336, h)
-
     def forecast(self, x_enc):
         # Normalization
         if self.use_norm:
@@ -337,8 +328,6 @@ class HSOFTS(BaseMultivariate):
 
         # Summing the outputs of both encoders
         enc_out = enc_smooth_out + enc_residual_out
-        _, _, N = x_enc.shape
-
 
         # Generating predictions from each segment using the projectors
         dec_outs = []
@@ -348,30 +337,18 @@ class HSOFTS(BaseMultivariate):
         # Concatenate outputs and pass through the final layer
         dec_out = torch.cat(dec_outs, dim=2)
         dec_out = self.final(dec_out)
-        print(f"Shape after final layer: {dec_out.shape}")
 
         # Additional projectors after the final
         final_outs = []
         for projector in self.additional_projectors:
             final_outs.append(projector(dec_out).permute(0, 2, 1))
-            print(f"Shape after additional projector {i}: {final_outs[-1].shape}")
 
         dec_out = torch.cat(final_outs, dim=1)
-        print(f"Shape before LSTM: {dec_out.shape}")
-
-        lstm_out, _ = self.lstm(dec_out)
-        print(f"Shape after LSTM: {lstm_out.shape}")
-
-        # Apply projection on LSTM output
-        dec_out = self.projection(lstm_out).permute(0, 2, 1)[:, :, :N]
-        print("aaaaa3")
 
         # Reapply normalization
         if self.use_norm:
             dec_out = dec_out * stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
             dec_out = dec_out + means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
-
-        print("aaaaa4")
 
         return dec_out
 
