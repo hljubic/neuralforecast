@@ -345,6 +345,10 @@ class HPatchTST_backbone(nn.Module):
         self.individual = individual
         self.enc_embedding = DataEmbedding_inverted(input_size, hidden_size)
 
+        # Two separate encoders: one for smoothed data and one for residuals
+        self.encoder_smooth = nn.Linear(hidden_size, hidden_size)
+        self.encoder_residual = nn.Linear(hidden_size, hidden_size)
+
         if self.pretrain_head:
             self.head = self.create_pretrain_head(
                 self.head_nf, c_in, fc_dropout
