@@ -313,21 +313,18 @@ class HSOFTS(BaseMultivariate):
             stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5).detach()
             x_enc = (x_enc - means) / stdev
 
-        # Smoothed data (e.g., Gaussian filter)
-        smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=4.75)
+        # Low-frequency component (e.g., smoothed version)
+        low_freq_x_enc = self.low_pass_filter(x_enc, kernel_size=3, sigma=1.75)
 
-        # Residuals (differences from smoothed data)
-        residual_x_enc = x_enc - smoothed_x_enc
-
-        #smoothed_x_enc = self.normalize_frequencies(smoothed_x_enc, 0.5)
-        residual_x_enc = self.gaussian_filter(residual_x_enc, kernel_size=3, sigma=1.75)
+        # High-frequency component (residuals or differences)
+        high_freq_x_enc = x_enc - low_freq_x_enc
 
         # Encoding with separate layers
-        enc_smooth_out = self.encoder_smooth(self.enc_embedding(smoothed_x_enc))
-        enc_residual_out = self.encoder_residual(self.enc_embedding(residual_x_enc))
+        enc_low_freq_out = self.encoder_low_freq(self.enc_embedding(low_freq_x_enc))
+        enc_high_freq_out = self.encoder_high_freq(self.enc_embedding(high_freq_x_enc))
 
         # Summing the outputs of both encoders
-        enc_out = enc_smooth_out + enc_residual_out
+        enc_out = enc_low_freq_out + enc_high_freq_out
 
         # Generating predictions from each segment using the projectors
         dec_outs = []
