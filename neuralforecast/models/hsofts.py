@@ -357,8 +357,8 @@ class HSOFTS(BaseMultivariate):
         dec_out = torch.cat(final_outs, dim=1)
         '''
 
-        dec_out = enc_out.permute(0, 2, 1)
-        dec_out = self.bbbb(dec_out)
+        dec_out = enc_out
+        dec_out = self.bbbb(dec_out).permute(0, 2, 1)
 
         # Reapply normalization
         if self.use_norm:
