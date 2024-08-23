@@ -287,25 +287,6 @@ class HSOFTS(BaseMultivariate):
             [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)]
         )
 
-    def gaussian_filter4(self, input_tensor, kernel_size, sigma):
-        """
-        Apply a Gaussian filter to smooth the input_tensor.
-        """
-        kernel = torch.arange(kernel_size, dtype=torch.float32) - (kernel_size - 1) / 2.0
-        kernel = torch.exp(-0.5 * (kernel / sigma) ** 2)
-        kernel = kernel / kernel.sum()  # Normalize
-        kernel = kernel.view(1, 1, -1).to(input_tensor.device)
-
-        smoothed_tensor = []
-        num_features = input_tensor.size(2)
-        for i in range(num_features):
-            feature_tensor = input_tensor[:, :, i].unsqueeze(1)  # [batch_size, 1, seq_len]
-            smoothed_feature = F.conv1d(feature_tensor, kernel, padding=(kernel_size - 1) // 2)
-            smoothed_tensor.append(smoothed_feature)
-        smoothed_tensor = torch.cat(smoothed_tensor, dim=1).permute(0, 2, 1)
-
-        return smoothed_tensor
-
     def forecast(self, x_enc):
         # Normalization
         if self.use_norm:
@@ -314,7 +295,23 @@ class HSOFTS(BaseMultivariate):
             x_enc = (x_enc - means) / stdev
 
         # Smoothed data (e.g., Gaussian filter)
-        smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=2.75)
+        #smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=2.75)
+        batch_size, seq_len, _ = x_enc.size()
+        quarter_len = seq_len // 4
+
+        # Define sigma values
+        sigmas = [4, 2, 1, 0.5]
+
+        # Initialize smoothed output tensor
+        smoothed_x_enc = torch.zeros_like(x_enc)
+
+        # Apply Gaussian filter to each quarter
+        for i in range(4):
+            start = i * quarter_len
+            end = (i + 1) * quarter_len if i < 3 else seq_len  # The last quarter takes any remaining data
+            smoothed_x_enc[:, start:end, :] = self.gaussian_filter(x_enc[:, start:end, :], kernel_size=3,
+                                                                   sigma=sigmas[i])
+
 
         residual_x_enc = x_enc - smoothed_x_enc
 
