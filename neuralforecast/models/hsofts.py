@@ -239,7 +239,7 @@ class HSOFTS(BaseMultivariate):
 
         _, _, N = x_enc.shape
         enc_out = self.enc_embedding(x_enc, None)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+        enc_out, attns = self.encoder(enc_out)#, attn_mask=None)
 
         # Generate predictions from each segment using corresponding projectors
         dec_outs = []
