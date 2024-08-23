@@ -40,7 +40,7 @@ class PositionalEncoding(nn.Module):
         return x
 
 
-class DataEmbedding_inverted(nn.Module):
+class DataEmbedding_inverted4(nn.Module):
     """
     Data Embedding with Positional Encoding and slope calculations.
     """
@@ -85,7 +85,7 @@ class DataEmbedding_inverted(nn.Module):
 
 
 # %% ../../nbs/models.hsofts.ipynb 6
-class DataEmbedding_inverted_orig(nn.Module):
+class DataEmbedding_inverted(nn.Module):
     """
     Data Embedding
     """
