@@ -353,17 +353,21 @@ class HSOFTS(BaseMultivariate):
             final_outs.append(projector(dec_out).permute(0, 2, 1))
 
         dec_out = torch.cat(final_outs, dim=1)
-
+        print("aaaaa1")
         # Pass through LSTM
         lstm_out, _ = self.lstm(dec_out)
+        print("aaaaa2")
 
         # Apply projection on LSTM output
         dec_out = self.projection(lstm_out).permute(0, 2, 1)[:, :, :N]
+        print("aaaaa3")
 
         # Reapply normalization
         if self.use_norm:
             dec_out = dec_out * stdev[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
             dec_out = dec_out + means[:, 0, :].unsqueeze(1).repeat(1, self.h, 1)
+
+        print("aaaaa4")
 
         return dec_out
 
