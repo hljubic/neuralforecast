@@ -289,7 +289,8 @@ class HSOFTS(BaseMultivariate):
 
 
         # Add LSTM layer
-        self.lstm = nn.LSTM(input_size=h, hidden_size=h, num_layers=1, batch_first=True)
+        #self.lstm = nn.LSTM(input_size=h, hidden_size=h, num_layers=1, batch_first=True)
+        self.lstm = nn.LSTM(input_size=8, hidden_size=h, num_layers=1, batch_first=True)
 
         # Projection layer
         self.projection = nn.Linear(hidden_size, h, bias=True)
