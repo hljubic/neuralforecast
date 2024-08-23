@@ -340,6 +340,7 @@ class HSOFTS(BaseMultivariate):
         for i, projector in enumerate(self.projectors):
             dec_outs.append(projector(enc_out))
 
+        '''
         # Concatenate outputs and pass through the final layer
         dec_out = torch.cat(dec_outs, dim=2)
         dec_out = self.final(dec_out)
@@ -348,8 +349,9 @@ class HSOFTS(BaseMultivariate):
         final_outs = []
         for projector in self.additional_projectors:
             final_outs.append(projector(dec_out).permute(0, 2, 1))
+        '''
 
-        dec_out = torch.cat(final_outs, dim=1)
+        dec_out = torch.cat(dec_outs, dim=1)
 
         # Reapply normalization
         if self.use_norm:
