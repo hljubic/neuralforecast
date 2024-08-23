@@ -50,6 +50,8 @@ class DataEmbedding_inverted(nn.Module):
         self.value_embedding = nn.Linear(c_in, d_model)
         self.position_encoding = PositionalEncoding(d_model, max_len)
         self.dropout = nn.Dropout(p=dropout)
+        self.layer_norm = nn.LayerNorm(d_model)
+
 
     def calculate_slope_embedding(self, x):
         # x: [Batch, Variate, Time]
@@ -80,13 +82,7 @@ class DataEmbedding_inverted(nn.Module):
 
         # Combine the original embedding with the slope embedding
         combined_embedding = slope_embedding
-
-        means = combined_embedding.mean(1, keepdim=True).detach()
-        combined_embedding = combined_embedding - means
-        stdev = torch.sqrt(
-            torch.var(combined_embedding, dim=1, keepdim=True, unbiased=False) + 1e-5
-        )
-        combined_embedding /= stdev
+        combined_embedding = self.layer_norm(combined_embedding)
 
         return self.dropout(combined_embedding)
 
