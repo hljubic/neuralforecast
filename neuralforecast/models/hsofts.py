@@ -275,6 +275,8 @@ class HSOFTS(BaseMultivariate):
         # Two separate encoders: one for smoothed data and one for residuals
         self.encoder_smooth = nn.Linear(hidden_size, hidden_size)
         self.encoder_residual = nn.Linear(hidden_size, hidden_size)
+
+        self.encoder = nn.Linear(self.hidden_size, self.hidden_size)
         # Projectors for each segment
         self.projectors = nn.ModuleList([nn.Linear(hidden_size, h, bias=True) for _ in range(self.projectors_num)])
 
@@ -336,6 +338,11 @@ class HSOFTS(BaseMultivariate):
 
         # Summing the outputs of both encoders
         enc_out = enc_smooth_out + enc_residual_out
+
+
+        _, _, N = x_enc.shape
+        enc_out = self.enc_embedding(x_enc)
+        enc_out = self.encoder(enc_out)#, attn_mask=None)
 
         # Generating predictions from each segment using the projectors
         dec_outs = []
