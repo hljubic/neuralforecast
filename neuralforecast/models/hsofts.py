@@ -358,7 +358,7 @@ class HSOFTS(BaseMultivariate):
         dec_out = torch.cat(final_outs, dim=1)
         print(f"Shape before LSTM: {dec_out.shape}")
 
-        lstm_out, _ = self.lstm(dec_out).permute(0, 2, 1)
+        lstm_out, _ = self.lstm(dec_out)
         print(f"Shape after LSTM: {lstm_out.shape}")
 
         # Apply projection on LSTM output
