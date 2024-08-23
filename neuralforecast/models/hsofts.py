@@ -346,17 +346,19 @@ class HSOFTS(BaseMultivariate):
         # Concatenate outputs and pass through the final layer
         dec_out = torch.cat(dec_outs, dim=2)
         dec_out = self.final(dec_out)
+        print(f"Shape after final layer: {dec_out.shape}")
 
         # Additional projectors after the final
         final_outs = []
         for projector in self.additional_projectors:
             final_outs.append(projector(dec_out).permute(0, 2, 1))
+            print(f"Shape after additional projector {i}: {final_outs[-1].shape}")
 
         dec_out = torch.cat(final_outs, dim=1)
-        print("aaaaa1")
-        # Pass through LSTM
+        print(f"Shape before LSTM: {dec_out.shape}")
+
         lstm_out, _ = self.lstm(dec_out)
-        print("aaaaa2")
+        print(f"Shape after LSTM: {lstm_out.shape}")
 
         # Apply projection on LSTM output
         dec_out = self.projection(lstm_out).permute(0, 2, 1)[:, :, :N]
