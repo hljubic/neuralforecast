@@ -265,11 +265,12 @@ class HSOFTS(BaseMultivariate):
         self.dec_in = n_series
         self.c_out = n_series
         self.use_norm = use_norm
+
         self.hidden_size = hidden_size
         self.projectors_num = 4
 
         # Architecture: Data Embedding
-        self.enc_embedding = DataEmbedding_inverted(n_series, hidden_size)
+        self.enc_embedding = DataEmbedding_inverted(input_size, hidden_size)
 
         # Two separate encoders: one for smoothed data and one for residuals
         self.encoder_smooth = nn.Linear(hidden_size, hidden_size)
@@ -313,7 +314,7 @@ class HSOFTS(BaseMultivariate):
             x_enc = (x_enc - means) / stdev
 
         # Smoothed data (e.g., Gaussian filter)
-        smoothed_x_enc = x_enc # self.gaussian_filter(x_enc, kernel_size=3, sigma=1.75)
+        smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=1.75)
 
         # Residuals (differences from smoothed data)
         residual_x_enc = x_enc - smoothed_x_enc
