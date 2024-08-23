@@ -276,11 +276,8 @@ class HSOFTS(BaseMultivariate):
         self.encoder_smooth = nn.Linear(hidden_size, hidden_size)
         self.encoder_residual = nn.Linear(hidden_size, hidden_size)
 
-        self.aaaa = nn.Linear(hidden_size, h * self.projectors_num, bias=True)
-        self.bbbb = nn.Linear(h * self.projectors_num, self.h, bias=True)
-
         # Projectors for each segment
-        self.projectors = nn.ModuleList([nn.Linear(hidden_size, h, bias=True) for _ in range(self.projectors_num)])
+        self.projectors = nn.ModuleList([nn.Linear(hidden_size, h // 2, bias=True) for _ in range(self.projectors_num * 2)])
 
         # Final Linear layer
         self.final = nn.Linear(h * self.projectors_num, h, bias=True)
@@ -298,24 +295,7 @@ class HSOFTS(BaseMultivariate):
             x_enc = (x_enc - means) / stdev
 
         # Smoothed data (e.g., Gaussian filter)
-        #smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=2.75)
-        batch_size, seq_len, _ = x_enc.size()
-        quarter_len = seq_len // 4
-
-        # Define sigma values
-        sigmas = [4, 2, 1, 0.5]
-
-        # Initialize smoothed output tensor
-        smoothed_x_enc = torch.zeros_like(x_enc)
-
-        # Apply Gaussian filter to each quarter
-        for i in range(4):
-            start = i * quarter_len
-            end = (i + 1) * quarter_len if i < 3 else seq_len  # The last quarter takes any remaining data
-            smoothed_x_enc[:, start:end, :] = self.gaussian_filter(x_enc[:, start:end, :], kernel_size=3,
-                                                                   sigma=sigmas[i])
-
-
+        smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=2.75)
         residual_x_enc = x_enc - smoothed_x_enc
 
         # Save min and max values before smoothing residuals
@@ -337,9 +317,7 @@ class HSOFTS(BaseMultivariate):
 
         # Summing the outputs of both encoders
         enc_out = enc_smooth_out + enc_residual_out
-        enc_out = self.aaaa(enc_out)
 
-        '''
         # Generating predictions from each segment using the projectors
         dec_outs = []
         for i, projector in enumerate(self.projectors):
@@ -355,10 +333,6 @@ class HSOFTS(BaseMultivariate):
             final_outs.append(projector(dec_out).permute(0, 2, 1))
 
         dec_out = torch.cat(final_outs, dim=1)
-        '''
-
-        dec_out = enc_out
-        dec_out = self.bbbb(dec_out).permute(0, 2, 1)
 
         # Reapply normalization
         if self.use_norm:
