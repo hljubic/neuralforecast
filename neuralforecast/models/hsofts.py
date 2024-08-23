@@ -282,6 +282,8 @@ class HSOFTS(BaseMultivariate):
         # Final Linear layer
         self.final = nn.Linear(h * self.projectors_num, h, bias=True)
 
+        self.learnable_sigma = nn.Parameter(torch.tensor([2.75]))
+
         # Additional projectors after final
         self.additional_projectors = nn.ModuleList(
             [nn.Linear(h, h // self.projectors_num, bias=True) for _ in range(self.projectors_num)]
@@ -295,7 +297,12 @@ class HSOFTS(BaseMultivariate):
             x_enc = (x_enc - means) / stdev
 
         # Smoothed data (e.g., Gaussian filter)
-        smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=2.75)
+
+
+
+        #smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=2.75)
+        smoothed_x_enc = self.gaussian_filter(x_enc, kernel_size=3, sigma=self.learnable_sigma)
+
         residual_x_enc = x_enc - smoothed_x_enc
 
         # Save min and max values before smoothing residuals
